@@ -1,4 +1,4 @@
-# 🚀 Simple Agentic-RAG
+# 🚀  Agentic-RAG
 
 > **Clean Document Intelligence System**  
 > Fast and Simple Document Processing with AI
