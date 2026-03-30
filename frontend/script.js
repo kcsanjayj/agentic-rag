@@ -55,13 +55,15 @@ class ChatApp {
         const message = this.messageInput.value.trim();
         if (!message || this.isProcessing) return;
 
+        // Store current question for display
+        this.currentQuestion = message;
+        
         this.addMessage(message, 'user');
         this.messageInput.value = '';
         this.handleInputChange();
 
-        this.showTypingIndicator();
-
         try {
+            this.showTypingIndicator();
             await this.sendQueryToBackend(message);
         } catch (error) {
             console.error('Error sending message:', error);
@@ -90,6 +92,7 @@ class ChatApp {
             }
 
             const data = await response.json();
+            this.lastResponseData = data; // Store for detailed display
             this.addMessage(data.response || data.answer || 'I processed your query but couldn\'t generate a response.', 'assistant');
             
         } catch (error) {
@@ -113,9 +116,45 @@ class ChatApp {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.innerHTML = `<p>${this.escapeHtml(content)}</p>`;
-
-        // Add timestamp outside the bubble
+        
+        // For assistant messages with structured content, add full system display
+        if (sender === 'assistant' && this.lastResponseData) {
+            const data = this.lastResponseData;
+            
+            // Build complete response with user question and system proof
+            let fullResponse = '';
+            
+            // User question
+            if (data.user_question) {
+                fullResponse += `User: ${data.user_question}\n\n`;
+            }
+            
+            // Main answer
+            fullResponse += content;
+            
+            // Agent execution
+            if (data.agent_execution) {
+                fullResponse += '\n\n⚙️ Agent Execution:\n';
+                fullResponse += `- Query Agent → ${data.agent_execution.query_agent.action}\n`;
+                fullResponse += `- Retrieval Agent → ${data.agent_execution.retrieval_agent.action}\n`;
+                fullResponse += `- Generation Agent → ${data.agent_execution.generation_agent.action}\n`;
+                fullResponse += `- Validation Agent → ${data.agent_execution.validation_agent.action}`;
+            }
+            
+            // Retrieved chunks
+            if (data.sources && data.sources.length > 0) {
+                fullResponse += '\n\n📚 Top Retrieved Chunks:\n';
+                data.sources.forEach((source, index) => {
+                    fullResponse += `${index + 1}. ${source.filename} (${source.chunk_id}) – ${source.similarity}\n`;
+                });
+            }
+            
+            contentDiv.innerHTML = `<p style="white-space: pre-wrap;">${this.escapeHtml(fullResponse)}</p>`;
+        } else {
+            contentDiv.innerHTML = `<p>${this.escapeHtml(content)}</p>`;
+        }
+        
+        // Add timestamp
         const timestampDiv = document.createElement('div');
         timestampDiv.className = 'message-timestamp';
         timestampDiv.textContent = this.getCurrentTime();

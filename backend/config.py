@@ -32,11 +32,11 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: Optional[str] = None
     
     # Gemini Settings
-    GEMINI_API_KEY: Optional[str] = "AIzaSyAPjtVUdP3RCTG4j8bKMKI5mub9rXso2y0"
+    GEMINI_API_KEY: Optional[str] = "AIzaSyD3TJnyqvnIKr5Kn-IsAyG7gsMndQVxJNI"  # User provided
     GEMINI_API_KEY_2: Optional[str] = None
     GEMINI_API_KEY_3: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"  # Free model
-    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_TEMPERATURE: float = 0.2
     
     # Anthropic Settings
     ANTHROPIC_API_KEY: Optional[str] = None
@@ -50,20 +50,32 @@ class Settings(BaseSettings):
     LOCAL_LLM_MODEL: str = "llama2"
     LOCAL_LLM_TEMPERATURE: float = 0.1
     
-    # Embeddings settings
-    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Embeddings settings - Use fast model for quick loading
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"  # Fast, 384d
     EMBEDDING_DEVICE: str = "cpu"
+    EMBEDDING_NORMALIZE: bool = True
+    EMBEDDING_PREFIX_QUERY: str = ""  # MiniLM doesn't need prefixes
+    EMBEDDING_PREFIX_DOC: str = ""
     
-    # Document processing
-    CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 50
+    # Document processing - Semantic Chunking (300 tokens, 75 overlap)
+    CHUNK_SIZE: int = 300
+    CHUNK_OVERLAP: int = 75
     MAX_DOCUMENT_SIZE: int = 200 * 1024 * 1024  # 200MB
     
-    # Retrieval settings
-    TOP_K_RETRIEVAL: int = 5
+    # Reranker settings - Use cross-encoder for 9.5+ quality
+    RERANKER_MODEL: str = "ms-marco-MiniLM-L-6-v2"  # Fast cross-encoder
+    RERANKER_DEVICE: str = "cpu"
+    USE_RERANKER: bool = True  # Enable for 9.5+ quality
+    TOP_K_RETRIEVAL: int = 12  # Increased for better reranking
+    TOP_K_FINAL: int = 3  # Final selected chunks
     SIMILARITY_THRESHOLD: float = 0.7
+    VECTOR_WEIGHT: float = 0.7  # Vector 70%
+    BM25_WEIGHT: float = 0.3    # BM25 30%
+    RERANK_THRESHOLD: float = 0.5  # Self-healing threshold
     
-    # Agent settings
+    # Query Rewriting settings
+    ENABLE_QUERY_REWRITING: bool = True
+    QUERY_REWRITE_TEMPERATURE: float = 0.1
     MAX_ITERATIONS: int = 3
     TIMEOUT_SECONDS: int = 30
     

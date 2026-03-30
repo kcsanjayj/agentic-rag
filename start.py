@@ -8,6 +8,7 @@ import sys
 import subprocess
 import time
 import webbrowser
+from pathlib import Path
 
 def check_python_version():
     """Check if Python version is compatible"""

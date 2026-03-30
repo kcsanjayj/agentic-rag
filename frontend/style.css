@@ -221,6 +221,130 @@ body {
     color: var(--text-primary);
 }
 
+.user-question {
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--accent-primary);
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.agent-execution {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 12px 0;
+}
+
+.agent-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.agent-item:last-child {
+    border-bottom: none;
+}
+
+.agent-icon {
+    font-size: 1.2em;
+    margin-right: 12px;
+    min-width: 30px;
+}
+
+.agent-details {
+    flex: 1;
+}
+
+.agent-name {
+    font-weight: 600;
+    color: var(--accent-primary);
+    margin-bottom: 2px;
+}
+
+.agent-action {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.agent-details {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.retrieval-evidence {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 12px 0;
+}
+
+.chunk-item {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--accent-secondary);
+}
+
+.chunk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.chunk-index {
+    background: var(--accent-primary);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.chunk-source {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.chunk-similarity {
+    font-size: 0.8em;
+    color: var(--success);
+    font-weight: 600;
+}
+
+.reasoning-display {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 12px 0;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.user-question {
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--accent-primary);
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
 .message-timestamp {
     font-size: 0.75rem;
     color: var(--text-muted);
