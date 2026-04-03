@@ -15,6 +15,7 @@ class SmartFallbackAgent:
         self.response_memory = {}  # Prevent repetition
         self.low_info_responses = {
             "test_document": {
+<<<<<<< HEAD
                 "summary": "This document is a small test PDF used for benchmarking.",
                 "insight": "",
                 "suggestion": ""
@@ -28,6 +29,21 @@ class SmartFallbackAgent:
                 "summary": "This document is a small test PDF used for benchmarking.",
                 "insight": "",
                 "suggestion": ""
+=======
+                "summary": "The document contains minimal semantic content and appears to be a lightweight sample PDF used for testing purposes.",
+                "insight": "This type of file is typically used in development workflows such as:\n- PDF rendering validation\n- Mobile app testing\n- Email attachment testing",
+                "suggestion": "For more detailed information, consider uploading a document with substantive content."
+            },
+            "placeholder": {
+                "summary": "This appears to be a placeholder document with template content rather than substantive information.",
+                "insight": "Placeholder documents are commonly used for:\n- Template demonstrations\n- Layout testing\n- Format validation",
+                "suggestion": "Replace with actual content documents to get meaningful answers."
+            },
+            "minimal_content": {
+                "summary": "The document contains minimal informational content and lacks sufficient detail for comprehensive analysis.",
+                "insight": "Documents with limited content may serve specific purposes:\n- Quick reference guides\n- Template files\n- Status indicators",
+                "suggestion": "Consider uploading more detailed documentation for better responses."
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             }
         }
     

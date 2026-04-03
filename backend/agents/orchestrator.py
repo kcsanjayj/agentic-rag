@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 """Orchestrator Agent - 10/10 Elite Architecture - RESUME MODE ENABLED
+=======
+"""
+Orchestrator Agent - 10/10 Elite Architecture
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
 Coordinates: Query → Intent → Rewrite → Retrieve → Rerank → Generate → Critic → Evaluate
 """
 
@@ -57,6 +62,7 @@ class OrchestratorAgent:
             processing_trace["query_type"] = query_analysis.get("query_type", "general")
             processing_trace["is_technical"] = plan["is_technical"]
             
+<<<<<<< HEAD
             # ✅ FINAL FIX: Simple answer mode for statements
             def is_statement(query):
                 return not any(word in query.lower() for word in ["what", "how", "where", "when", "why", "tell", "show", "list"])
@@ -64,6 +70,8 @@ class OrchestratorAgent:
             # Move statement handling after retrieval
             statement_mode = is_statement(request.query)
             
+=======
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             agent_steps.append({
                 "agent": "query_agent",
                 "action": "analyze_query",
@@ -116,6 +124,7 @@ class OrchestratorAgent:
             )
             processing_trace["iteration"] = iteration_result
             
+<<<<<<< HEAD
             # STEP 6: Route based on extraction mode and document type
             doc_type = doc_analysis.get("document_type", "")
             extraction_mode = doc_analysis.get("extraction_mode", "full_rag_mode")
@@ -142,6 +151,10 @@ class OrchestratorAgent:
                     request, doc_analysis, retrieved_docs, agent_steps, start_time, conversation_id, processing_trace
                 )
             elif failure_mode == "high_density_interpret":
+=======
+            # Step 6: Route based on failure mode
+            if failure_mode == "high_density_interpret":
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
                 # 9.8: High-density content - interpret directly
                 return await self._handle_high_density_interpret(
                     request, doc_analysis, retrieved_docs, agent_steps, start_time, conversation_id, processing_trace
@@ -154,8 +167,12 @@ class OrchestratorAgent:
             # Step 7: Generate Response
             generation_result = await self.generation_agent.generate(
                 query=request.query,
+<<<<<<< HEAD
                 query_analysis=query_analysis,
                 retrieved_docs=retrieved_docs,
+=======
+                context=retrieved_docs,
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
                 agent_trace=processing_trace
             )
             
@@ -202,8 +219,12 @@ class OrchestratorAgent:
                 if retry_docs:
                     generation_result = await self.generation_agent.generate(
                         query=request.query,
+<<<<<<< HEAD
                         query_analysis=query_analysis,
                         retrieved_docs=retry_docs,
+=======
+                        context=retry_docs,
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
                         agent_trace=processing_trace
                     )
                     answer = generation_result.get("response", answer)
@@ -379,6 +400,7 @@ class OrchestratorAgent:
     
     def _detect_failure_mode(self, retrieved_docs: List[Dict], doc_analysis: Dict[str, Any],
                             query: str) -> str:
+<<<<<<< HEAD
         """✅ EXACT FIX: Hard stop on wrong fallback for resumes"""
         
         # Get retrieval score if available
@@ -386,10 +408,14 @@ class OrchestratorAgent:
         if retrieved_docs:
             scores = [doc.get("score", 0) for doc in retrieved_docs]
             retrieval_score = max(scores) if scores else 0.0
+=======
+        """Detect failure mode for appropriate handling - 10/10 technical query detection"""
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
         
         if not retrieved_docs:
             return "no_chunks"
         
+<<<<<<< HEAD
         # Check document quality
         doc_quality = doc_analysis.get("quality_score", 0.0)
         doc_type = doc_analysis.get("document_type", "")
@@ -409,6 +435,35 @@ class OrchestratorAgent:
         # Default to success - don't trigger fallback unnecessarily
         return "success"
 
+=======
+        # 10/10 FEATURE: Technical/Dense content detection for sparse reasoning
+        if doc_analysis.get("is_technical") or doc_analysis.get("is_high_density"):
+            return "high_density_interpret"  # Interpret directly, don't fallback
+        
+        # 10/10 FIX: Check if query itself is technical (for failed retrieval cases)
+        query_lower = query.lower()
+        technical_keywords = [
+            "estimate", "range", "bound", "threshold", "classification", 
+            "model", "combined", "conservative", "aggregation", "uncertainty"
+        ]
+        is_technical_query = any(kw in query_lower for kw in technical_keywords)
+        
+        # If query is technical and we have limited content, try sparse reasoning
+        if is_technical_query and len(retrieved_docs) < 3:
+            return "high_density_interpret"
+        
+        if doc_analysis.get("quality_score", 0) < 0.3:
+            return "low_content"
+        
+        if doc_analysis.get("document_type") == "low_information":
+            return "low_content"
+        
+        if len(retrieved_docs) < 2:
+            return "partial_info"
+        
+        return "success"
+    
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
     async def _handle_smart_fallback(self, request: QueryRequest, doc_analysis: Dict[str, Any],
                                     retrieved_docs: List[Dict], agent_steps: List[Dict],
                                     start_time: float, conversation_id: str,
@@ -452,6 +507,7 @@ class OrchestratorAgent:
             }
         )
     
+<<<<<<< HEAD
     async def _handle_simple_extraction(self, request: QueryRequest, retrieved_docs: List[Dict], 
                                      agent_steps: List[Dict], start_time: float, 
                                      conversation_id: str, processing_trace: Dict,
@@ -743,6 +799,8 @@ class OrchestratorAgent:
                     return content[section_start:section_end].strip()[:300]
         return ""
     
+=======
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
     async def _handle_high_density_interpret(self, request: QueryRequest, doc_analysis: Dict[str, Any],
                                           retrieved_docs: List[Dict], agent_steps: List[Dict],
                                           start_time: float, conversation_id: str,
@@ -1088,8 +1146,12 @@ class OrchestratorAgent:
         # Re-generate with specific improvements
         refined_result = await self.generation_agent.generate(
             query=query,
+<<<<<<< HEAD
             query_analysis={"intent": "refinement"},
             retrieved_docs=retrieved_docs,
+=======
+            context=retrieved_docs,
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             agent_trace=processing_trace,
             previous_answer=answer,
             improvements=improvements

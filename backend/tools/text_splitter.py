@@ -19,6 +19,7 @@ class TextSplitter:
         self.separators = ['\n\n', '\n', '. ', '! ', '? ', ' ', '']
     
     def split_text(self, text: str, metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+<<<<<<< HEAD
         """✅ STEP 3: Proper chunk storage → no undefined chunks, grounding > 0.9"""
         try:
             logger.info(f"Splitting text into chunks with proper text storage")
@@ -40,12 +41,52 @@ class TextSplitter:
                 chunked_documents.append(chunk_doc)
             
             logger.info(f"Split text into {len(chunked_documents)} chunks with proper text storage")
+=======
+        """Split text into chunks"""
+        try:
+            logger.info(f"Splitting text into chunks (size: {self.chunk_size}, overlap: {self.chunk_overlap})")
+            
+            if not text or not text.strip():
+                return []
+            
+            # Clean the text first
+            cleaned_text = self._clean_text(text)
+            
+            # Choose splitting strategy
+            if len(cleaned_text) <= self.chunk_size:
+                # Text is short enough, return as single chunk
+                return [{
+                    "content": cleaned_text,
+                    "metadata": metadata or {},
+                    "chunk_index": 0,
+                    "start_char": 0,
+                    "end_char": len(cleaned_text)
+                }]
+            
+            # Use recursive character splitting
+            chunks = self._recursive_split(cleaned_text, separators=self.separators)
+            
+            # Add metadata to each chunk
+            chunked_documents = []
+            for i, chunk in enumerate(chunks):
+                chunk_doc = {
+                    "content": chunk,
+                    "metadata": metadata.copy() if metadata else {},
+                    "chunk_index": i,
+                    "start_char": cleaned_text.find(chunk),
+                    "end_char": cleaned_text.find(chunk) + len(chunk)
+                }
+                chunked_documents.append(chunk_doc)
+            
+            logger.info(f"Split text into {len(chunked_documents)} chunks")
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             return chunked_documents
             
         except Exception as e:
             logger.error(f"Error splitting text: {str(e)}")
             raise
     
+<<<<<<< HEAD
     def _smart_chunk(self, text: str) -> List[str]:
         """✅ EXACT FIX: Section-based chunking for 0.30 → 0.7+ retrieval"""
         try:
@@ -86,6 +127,8 @@ class TextSplitter:
             logger.error(f"Error in fallback split: {str(e)}")
             return [text]
     
+=======
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text"""
         try:

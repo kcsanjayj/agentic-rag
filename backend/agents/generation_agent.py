@@ -109,6 +109,7 @@ class GenerationAgent:
                 response = await self.llm_client.generate_response(simple_prompt, max_tokens=100)
                 answer = response.strip()
                 
+<<<<<<< HEAD
                 # Check response quality
                 if len(answer) < 10:
                     answer = "Extracting structured insights from document..."
@@ -116,6 +117,14 @@ class GenerationAgent:
                 # Calculate confidence score
                 confidence = self._calculate_confidence(answer, context, query)
                 print(f"Confidence score: {confidence}")
+=======
+                if len(answer) < 10:
+                    answer = "The document appears to be a test PDF with minimal content."
+            
+            # Calculate confidence score
+            confidence = self._calculate_confidence(answer, context, query)
+            print(f"Confidence score: {confidence}")
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             
             processing_time = time.time() - start_time
             print(f"✅ Generation completed in {processing_time:.2f}s")
@@ -156,6 +165,7 @@ class GenerationAgent:
             }
     
     def _prepare_context(self, retrieved_docs: List[Dict[str, Any]]) -> List[str]:
+<<<<<<< HEAD
         """Prepare and compress context from retrieved documents"""
         # ✅ STEP 1: Limit to top 3 chunks (memory efficient)
         docs = retrieved_docs[:3]
@@ -171,12 +181,22 @@ class GenerationAgent:
         
         # ✅ STEP 3: Join compressed chunks
         context = "\n\n".join(compressed_chunks)
+=======
+        """Prepare context from retrieved documents"""
+        # ✅ STEP 1: Clean context
+        docs = retrieved_docs[:3]  # limit noisy chunks
+        context = "\n\n".join([doc['content'] for doc in docs])
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
         return [context] if context else []
     
     def _build_prompt(self, query: str, query_analysis: Dict[str, Any],
                      context: List[str], agent_trace: Optional[Dict[str, Any]] = None,
                      previous_answer: Optional[str] = None) -> str:
+<<<<<<< HEAD
         """Build the prompt for grounded RAG with hard grounding rule"""
+=======
+        """Build the prompt for grounded RAG with citations"""
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
         
         # Get retrieved docs from agent_trace or use empty list
         retrieved_docs = agent_trace.get("retrieved_docs", []) if agent_trace else []
@@ -197,6 +217,7 @@ class GenerationAgent:
 RETRIEVED CHUNKS:
 {retrieved_text}
 
+<<<<<<< HEAD
 🚨 CRITICAL GROUNDING RULE:
 Answer ONLY from the provided resume content. Do NOT generalize, assume, or use external knowledge.
 
@@ -207,6 +228,13 @@ STRICT INSTRUCTIONS:
 4. Do NOT make up or infer any information
 5. Do NOT use any external knowledge or generalizations
 6. Provide structured answer with evidence ONLY from resume
+=======
+INSTRUCTIONS:
+1. Answer ONLY using the retrieved chunks above
+2. Include specific citations like [Chunk 1], [Chunk 2] for each claim
+3. If information is not found in chunks, say "Not found in retrieved documents"
+4. Provide structured answer with evidence
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
 
 ANSWER:
 """

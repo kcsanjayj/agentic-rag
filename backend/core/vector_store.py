@@ -13,12 +13,17 @@ logger = setup_logger(__name__)
 
 
 class VectorStore:
+<<<<<<< HEAD
     """Vector store using ChromaDB for document storage and retrieval with lazy loading"""
+=======
+    """Vector store using ChromaDB for document storage and retrieval"""
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
     
     def __init__(self):
         self.client = None
         self.collection = None
         self.collection_name = "documents"
+<<<<<<< HEAD
         self._active_namespace = None  # ✅ STEP 1: No default namespace
         self._active_pdf = None  # ✅ STEP 1: Track active PDF separately
         self._loaded_collections = {}  # Lazy loading cache
@@ -41,11 +46,25 @@ class VectorStore:
                 # Fall back to new namespace system
                 self.collection = self._get_or_create_collection(self._active_namespace)
             
+=======
+        self._initialize_client()
+    
+    def _initialize_client(self):
+        """Initialize ChromaDB client"""
+        try:
+            logger.info("Initializing ChromaDB client")
+            self.client = chromadb.PersistentClient(path=settings.CHROMA_DB_PATH)
+            self.collection = self.client.get_or_create_collection(
+                name=self.collection_name,
+                metadata={"hnsw:space": "cosine"}
+            )
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             logger.info("ChromaDB client initialized successfully")
         except Exception as e:
             logger.error(f"Error initializing ChromaDB client: {str(e)}")
             raise
     
+<<<<<<< HEAD
     def _get_or_create_collection(self, namespace: str):
         """Get or create collection with lazy loading"""
         if namespace in self._loaded_collections:
@@ -118,21 +137,30 @@ class VectorStore:
         
         return self.collection
     
+=======
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
     async def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]]) -> List[str]:
         """Add documents to the vector store"""
         try:
             logger.info(f"Adding {len(texts)} documents to vector store")
             
+<<<<<<< HEAD
             # ✅ FINAL FIX: Ensure collection is loaded
             collection = self.get_collection()
             if collection is None:
                 raise Exception("Failed to get or create collection")
             
+=======
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             # Generate IDs for documents
             ids = [str(uuid.uuid4()) for _ in texts]
             
             # Add documents to collection
+<<<<<<< HEAD
             collection.add(
+=======
+            self.collection.add(
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
                 documents=texts,
                 metadatas=metadatas,
                 ids=ids
@@ -151,6 +179,7 @@ class VectorStore:
         try:
             logger.info(f"Performing similarity search with top_k={top_k}")
             
+<<<<<<< HEAD
             # ✅ FINAL FIX: Ensure collection is loaded
             collection = self.get_collection()
             if collection is None:
@@ -158,17 +187,26 @@ class VectorStore:
             
             # Query the collection
             results = collection.query(
+=======
+            # Query the collection
+            results = self.collection.query(
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
                 query_embeddings=[query_embedding],
                 n_results=top_k
             )
             
+<<<<<<< HEAD
             # Format results - ✅ STEP 3: Always retrieve chunk['text'] → grounding > 0.9
+=======
+            # Format results
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             formatted_results = []
             if results['documents'] and results['documents'][0]:
                 for i, doc in enumerate(results['documents'][0]):
                     metadata = results['metadatas'][0][i] if results['metadatas'] and results['metadatas'][0] else {}
                     distance = results['distances'][0][i] if results['distances'] and results['distances'][0] else 1.0
                     
+<<<<<<< HEAD
                     # ✅ STEP 3: Ensure text is always returned for grounding
                     formatted_results.append({
                         "id": metadata.get("id", f"chunk_{i}"),
@@ -178,6 +216,18 @@ class VectorStore:
                         "score": 1 - distance,  # Convert distance to similarity score
                         "chunk_index": metadata.get("chunk_index", i)
                     })
+=======
+                    # Convert distance to similarity score (cosine distance to similarity)
+                    similarity = 1 - distance
+                    
+                    if similarity >= threshold:
+                        formatted_results.append({
+                            "content": doc,
+                            "metadata": metadata,
+                            "score": similarity,
+                            "id": results['ids'][0][i] if results['ids'] and results['ids'][0] else str(uuid.uuid4())
+                        })
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
             
             logger.info(f"Found {len(formatted_results)} similar documents")
             return formatted_results

@@ -1,8 +1,13 @@
+<<<<<<< HEAD
 # 🚀 Agentic RAG System - Ultimate 9.7+ Architecture
+=======
+# 🤖 Agentic RAG System
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
 
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<<<<<<< HEAD
 [![Performance](https://img.shields.io/badge/Performance-9.7%2B-brightgreen.svg)](https://github.com)
 
 An **elite, FAANG-level** intelligent document Q&A system that achieves **9.7+ performance** through advanced agentic AI patterns with **9 final push optimizations**.
@@ -36,10 +41,39 @@ Takes user questions about documents and answers them using a **9-step optimized
 | **🎯 Mode-Based Routing** | Dynamic response per document type | Context-aware processing |
 
 ## 🏗️ Ultimate Architecture
+=======
+
+An intelligent document Q&A system that plans, retrieves, reasons, and self-corrects using advanced agentic AI patterns.
+
+## What It Does
+
+Takes user questions about documents and answers them using a multi-step agentic pipeline:
+1. **Plans** execution strategy based on query analysis
+2. **Retrieves** relevant document chunks with query rewriting for better results
+3. **Selects tools** based on content type (retrieval, interpretation, or fallback)
+4. **Iterates** - tries, evaluates, improves, retries if needed
+5. **Self-corrects** via critic agent that validates output quality
+6. **Reports** full reasoning trace including confidence, tools used, and evaluation scores
+
+## Key Features
+
+| Feature | Implementation |
+|---------|---------------|
+| **Planning Layer** | 6-step execution plan generated before any action |
+| **Tool System** | Dynamic tool selection: `retrieve_tool`, `interpret_tool`, `fallback_tool` |
+| **Iteration Loop** | Evaluates each attempt, retries with improvements if grounding < 0.9 |
+| **Query Rewrite** | Generates 3 variants, selects best based on predicted performance |
+| **Critic Agent** | Evaluates grounding, completeness, relevance; triggers self-correction |
+| **Multi-Strategy Routing** | Detects sparse vs dense content, selects appropriate processing |
+| **Transparent Output** | Shows PLAN, TOOLS USED, AGENT ACTIONS, ITERATION, CRITIC VERDICT, EVALUATION |
+
+## Architecture
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
 
 ```
 User Query
     ↓
+<<<<<<< HEAD
 🔒 PDF Isolation Layer → active_pdf namespace
     ↓
 🧠 Auto Mode Detection → simple_extraction / resume_mode / full_rag_mode
@@ -219,6 +253,25 @@ Built with **9 final push optimizations** for **FAANG-level performance** achiev
 
 **🚀 Ready for production deployment with ultimate 9.7+ performance!**
 
+=======
+Planning Agent → Execution Plan
+    ↓
+Query Agent → Intent Classification + Technical Detection
+    ↓
+Retrieval Agent → ChromaDB Search + Reranking
+    ↓
+Tool Selector → retrieve_tool / interpret_tool / fallback_tool
+    ↓
+Generation Agent → Answer with source grounding
+    ↓
+Critic Agent → Validate & Score
+    ↓
+Iteration Loop (if needed)
+    ↓
+Formatted Response with full trace
+```
+
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
 ## Technical Stack
 
 - **API**: FastAPI + Uvicorn

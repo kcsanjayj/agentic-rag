@@ -80,7 +80,11 @@ async def query_documents(request: QueryRequest):
 
 @router.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(file: UploadFile = File(...)):
+<<<<<<< HEAD
     """Upload and process a document with automatic cleanup"""
+=======
+    """Upload and process a document"""
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
     try:
         logger.info(f"Uploading document: {file.filename}")
         
@@ -91,10 +95,13 @@ async def upload_document(file: UploadFile = File(...)):
                 detail=f"Unsupported file format. Supported formats: {', '.join(document_loader.get_supported_formats())}"
             )
         
+<<<<<<< HEAD
         # Clear old data before uploading new document (memory efficient)
         vector_store = get_vector_store()
         vector_store.clear_old_namespaces()
         
+=======
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
         # Save uploaded file
         upload_dir = "data/uploads"
         os.makedirs(upload_dir, exist_ok=True)
@@ -114,6 +121,10 @@ async def upload_document(file: UploadFile = File(...)):
         
         # Generate embeddings and store in vector store
         embedding_generator = get_embedding_generator()
+<<<<<<< HEAD
+=======
+        vector_store = get_vector_store()
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
         
         chunk_texts = [chunk["content"] for chunk in chunks]
         chunk_metadatas = []
@@ -131,6 +142,7 @@ async def upload_document(file: UploadFile = File(...)):
         logger.info(f"Generating embeddings for {len(chunk_texts)} chunks...")
         embeddings = await embedding_generator.generate_embeddings(chunk_texts)
         
+<<<<<<< HEAD
         # Store in vector store with complete PDF isolation
         pdf_name = document['filename'].replace('.pdf', '').replace('.txt', '').replace('.docx', '')
         vector_store.set_active_pdf(pdf_name)  # ✅ STEP 1: Complete PDF isolation
@@ -139,6 +151,10 @@ async def upload_document(file: UploadFile = File(...)):
         vector_store.clear_old_namespaces()
         
         logger.info(f"Storing in isolated PDF namespace: {pdf_name}")
+=======
+        # Store in vector store
+        logger.info("Storing in vector store...")
+>>>>>>> 97af6411c5fc919c79d6656e755e8bfe819e0e7e
         chunk_ids = await vector_store.add_documents(chunk_texts, chunk_metadatas)
         
         logger.info(f"Document processed successfully: {len(chunks)} chunks created")
