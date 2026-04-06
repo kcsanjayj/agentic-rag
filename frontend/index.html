@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Application</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Agent Execution Trace Sidebar -->
+        <aside class="execution-trace-panel" id="executionTracePanel">
+            <div class="trace-header">
+                <h3><i class="fas fa-brain"></i> Agent Execution Trace</h3>
+                <button class="toggle-trace-btn" id="toggleTraceBtn">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+            <div class="trace-content" id="traceContent">
+                <div class="trace-placeholder">
+                    <i class="fas fa-robot"></i>
+                    <p>Submit a query to see the agent execution trace</p>
+                </div>
+            </div>
+            <div class="trace-stats" id="traceStats" style="display: none;">
+                <div class="stat-item">
+                    <span class="stat-label">⭐ Score:</span>
+                    <span class="stat-value" id="traceScore">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">🔁 Iterations:</span>
+                    <span class="stat-value" id="traceIterations">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">📚 Docs Retrieved:</span>
+                    <span class="stat-value" id="traceDocs">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">⏱️ Time:</span>
+                    <span class="stat-value" id="traceTime">-</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Container -->
+        <div class="chat-container">
+        <header class="chat-header">
+            <div class="header-content">
+                <h1>Agentic-RAG</h1>
+                <div class="header-buttons">
+                    <button class="ai-config-btn" id="configBtn">
+                        <i class="fas fa-robot"></i>
+                        <span>AI Config</span>
+                    </button>
+                    <button class="new-chat-btn" id="newChatBtn">
+                        <i class="fas fa-plus"></i>
+                        <span>New Chat</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- AI Configuration Modal -->
+        <div class="config-modal" id="configModal">
+            <div class="config-modal-content">
+                <div class="config-header">
+                    <h3><i class="fas fa-robot"></i> AI Configuration</h3>
+                    <button class="close-modal-btn" id="closeConfigBtn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="config-body">
+                    <div class="config-group">
+                        <label for="providerSelect">AI Provider:</label>
+                        <select id="providerSelect" class="config-select">
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic Claude</option>
+                            <option value="nvidia">NVIDIA</option>
+                            <option value="groq">Groq</option>
+                            <option value="huggingface">HuggingFace</option>
+                            <option value="local">Local (Ollama)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="apiKeyInput">API Key:</label>
+                        <input type="password" id="apiKeyInput" class="config-input" placeholder="Enter your API key...">
+                        <button class="toggle-visibility-btn" id="toggleKeyBtn">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="modelSelect">Model:</label>
+                        <select id="modelSelect" class="config-select">
+                            <option value="">Auto-select</option>
+                        </select>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="tempSlider">Temperature: <span id="tempValue">0.7</span></label>
+                        <input type="range" id="tempSlider" class="config-slider" min="0" max="2" step="0.1" value="0.7">
+                    </div>
+                </div>
+                <div class="config-footer">
+                    <button class="config-btn test-btn" id="testConfigBtn">
+                        <i class="fas fa-plug"></i> Test Connection
+                    </button>
+                    <button class="config-btn save-btn" id="saveConfigBtn">
+                        <i class="fas fa-rocket"></i> Save & Restart
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <main class="chat-main">
+            <div class="messages-container" id="messagesContainer">
+                <div class="message assistant-message">
+                    <div class="message-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-wrapper">
+                        <div class="message-content">
+                            <p>Hello! I'm your AI assistant. Upload a resume or document and I'll help you analyze it.</p>
+                        </div>
+                        <div class="message-timestamp">05:14 PM</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="chat-footer">
+            <div class="input-container">
+                <div class="file-upload-wrapper">
+                    <input type="file" id="fileInput" accept="*" multiple style="display: none;">
+                    <button class="file-upload-btn" id="fileUploadBtn">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div class="text-input-wrapper">
+                    <textarea 
+                        id="messageInput" 
+                        placeholder="Ask me anything about your documents..." 
+                        rows="1"
+                        maxlength="2000"
+                    ></textarea>
+                    <div class="char-count" id="charCount">0/2000</div>
+                </div>
+                <button class="send-btn" id="sendBtn" disabled>
+                    <i class="fas fa-arrow-up"></i>
+                </button>
+            </div>
+        </footer>
+        </div><!-- /chat-container -->
+    </div><!-- /app-container -->
+
+    <script src="script.js"></script>
+</body>
+</html>

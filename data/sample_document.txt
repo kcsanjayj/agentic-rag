@@ -1,0 +1,89 @@
+TRANSFORMER ARCHITECTURES AND ATTENTION MECHANISMS
+A Comprehensive Overview
+
+INTRODUCTION
+
+The transformer architecture, introduced by Vaswani et al. in 2017, has revolutionized natural language processing and become the foundation for modern large language models. Unlike previous sequence-to-sequence models based on recurrent neural networks (RNNs) or convolutional neural networks (CNNs), transformers rely entirely on attention mechanisms to draw global dependencies between input and output sequences.
+
+The key innovation is the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when encoding each position. This enables parallel processing of all positions simultaneously, dramatically speeding up training compared to sequential RNN architectures.
+
+ATTENTION MECHANISMS
+
+Attention can be described as a mapping from a query and a set of key-value pairs to an output. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.
+
+The scaled dot-product attention is defined as:
+Attention(Q, K, V) = softmax(QK^T / sqrt(d_k))V
+
+Where Q represents queries, K represents keys, V represents values, and d_k is the dimension of the keys. The scaling factor prevents the dot products from growing too large in magnitude.
+
+Multi-head attention extends this mechanism by linearly projecting the queries, keys, and values h times with different learned projections to d_k, d_k, and d_v dimensions respectively. This allows the model to jointly attend to information from different representation subspaces at different positions.
+
+MultiHead(Q, K, V) = Concat(head_1, ..., head_h)W^O
+where head_i = Attention(QW_i^Q, KW_i^K, VW_i^V)
+
+TRANSFORMER ARCHITECTURE
+
+The original transformer follows an encoder-decoder structure. The encoder maps an input sequence to a sequence of continuous representations, while the decoder generates an output sequence one element at a time.
+
+Each encoder layer consists of two sub-layers:
+1. Multi-head self-attention mechanism
+2. Position-wise fully connected feed-forward network
+
+Each decoder layer has three sub-layers:
+1. Masked multi-head self-attention (preventing positions from attending to subsequent positions)
+2. Multi-head attention over encoder outputs
+3. Position-wise feed-forward network
+
+Residual connections surround each sub-layer, followed by layer normalization. This can be expressed as:
+LayerNorm(x + Sublayer(x))
+
+The feed-forward network applies two linear transformations with a ReLU activation:
+FFN(x) = max(0, xW_1 + b_1)W_2 + b_2
+
+POSITIONAL ENCODING
+
+Since the transformer contains no recurrence and no convolution, it must inject information about the relative or absolute position of tokens in the sequence. Positional encodings are added to input embeddings at the bottom of encoder and decoder stacks.
+
+The original paper uses sinusoidal functions:
+PE(pos, 2i) = sin(pos / 10000^(2i/d_model))
+PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
+
+This allows the model to learn to attend by relative positions, as PE(pos+k) can be represented as a linear function of PE(pos).
+
+COMPUTATIONAL COMPLEXITY
+
+Self-attention connects all positions with a constant number of sequentially executed operations, whereas RNNs require O(n) sequential operations. However, self-attention has O(n²) complexity with sequence length due to computing attention weights between all pairs.
+
+For long sequences, this quadratic complexity becomes a bottleneck. Various approaches address this:
+- Sparse attention patterns
+- Linear attention approximations
+- Memory-efficient attention implementations
+- Sliding window attention
+
+TRANSFER LEARNING AND PRE-TRAINING
+
+Modern NLP heavily relies on transfer learning from large pre-trained models. BERT (Bidirectional Encoder Representations from Transformers) introduced masked language modeling, where random tokens are masked and the model learns to predict them using bidirectional context.
+
+GPT (Generative Pre-trained Transformer) uses autoregressive left-to-right modeling, making it suitable for generation tasks. Both approaches demonstrate that pre-training on large corpora followed by task-specific fine-tuning dramatically improves performance across diverse NLP tasks.
+
+EVALUATION METRICS
+
+BLEU (Bilingual Evaluation Understudy) remains a widely used metric for evaluating text generation quality, particularly machine translation. It computes n-gram precision between generated and reference texts, with a brevity penalty to discourage overly short outputs.
+
+However, BLEU has limitations in capturing semantic meaning. Modern evaluation increasingly relies on learned metrics like BERTScore, which computes token similarity using contextual embeddings, and human evaluation for assessing coherence and factual accuracy.
+
+SCALABILITY
+
+Transformer architectures have demonstrated remarkable scalability. Models have grown from the original transformer's 65 million parameters to GPT-3's 175 billion parameters and beyond. This scaling has led to emergent capabilities including in-context learning, chain-of-thought reasoning, and few-shot task adaptation.
+
+The key enablers of this scaling include:
+- Efficient attention implementations (Flash Attention)
+- Model parallelism and pipeline parallelism
+- Mixed precision training
+- Gradient checkpointing for memory efficiency
+
+CONCLUSION
+
+Transformers have become the dominant architecture in NLP and are increasingly applied to vision, speech, and multimodal domains. Their ability to capture long-range dependencies through attention, parallelizable training, and scalable architecture makes them the foundation of modern AI systems.
+
+Future research directions include more efficient attention mechanisms, better positional encoding schemes, improved training stability for very large models, and architectures that combine the strengths of transformers with other inductive biases.

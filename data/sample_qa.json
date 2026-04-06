@@ -1,0 +1,67 @@
+{
+  "dataset_name": "Agentic-RAG Sample QA Dataset",
+  "description": "15 manually curated QA pairs for evaluating multi-agent RAG system",
+  "source": "arXiv research papers on transformers and attention mechanisms",
+  "questions": [
+    {
+      "question": "What is the attention mechanism in transformer models?",
+      "answer": "Attention mechanism allows models to focus on relevant parts of input sequences by computing weighted relationships between all positions simultaneously using query-key-value matrices."
+    },
+    {
+      "question": "How does self-attention differ from recurrent architectures?",
+      "answer": "Self-attention processes all tokens simultaneously enabling parallelization, while RNNs process tokens sequentially. Attention captures long-range dependencies more effectively."
+    },
+    {
+      "question": "What is multi-head attention and why is it used?",
+      "answer": "Multi-head attention uses multiple attention heads in parallel to attend to information from different representation subspaces, allowing the model to capture various types of relationships."
+    },
+    {
+      "question": "Explain the computational complexity of self-attention.",
+      "answer": "Self-attention has O(n²) complexity with sequence length due to computing dot products between all token pairs, which is faster than sequential RNN processing for long sequences."
+    },
+    {
+      "question": "What are positional encodings and why are they necessary?",
+      "answer": "Positional encodings inject sequence order information since transformers process all positions simultaneously. They use sinusoidal functions or learned embeddings."
+    },
+    {
+      "question": "How does the transformer architecture enable parallel training?",
+      "answer": "Transformers eliminate sequential dependencies by using attention instead of recurrence, allowing all positions to be processed simultaneously during both training and inference."
+    },
+    {
+      "question": "What is the role of feed-forward networks in transformers?",
+      "answer": "Position-wise feed-forward networks apply the same transformation independently to each position, adding non-linearity and increasing model capacity after attention."
+    },
+    {
+      "question": "Explain layer normalization in transformer models.",
+      "answer": "Layer normalization stabilizes training by normalizing inputs across features, applied before sublayers (pre-norm) or after (post-norm) to prevent gradient issues."
+    },
+    {
+      "question": "What is the purpose of residual connections in transformers?",
+      "answer": "Residual connections help gradients flow through deep networks by adding input to output of each sublayer, enabling training of very deep transformer models."
+    },
+    {
+      "question": "How do transformers handle long-range dependencies better than RNNs?",
+      "answer": "Transformers directly connect any two positions via attention with constant path length, while RNNs require O(n) sequential steps limiting long-range information flow."
+    },
+    {
+      "question": "What is the BLEU score and how is it used in NLP?",
+      "answer": "BLEU is a metric evaluating machine translation quality by comparing n-gram overlap between generated and reference texts, with brevity penalty for short outputs."
+    },
+    {
+      "question": "Explain the concept of transfer learning in NLP.",
+      "answer": "Transfer learning pre-trains models on large corpora then fine-tunes on specific tasks, allowing models to leverage general linguistic knowledge for downstream applications."
+    },
+    {
+      "question": "What is the difference between encoder and decoder in transformers?",
+      "answer": "Encoders process input bidirectionally with self-attention; decoders generate output autoregressively using masked self-attention and cross-attention to encoder outputs."
+    },
+    {
+      "question": "How does BERT's masked language modeling work?",
+      "answer": "BERT randomly masks input tokens and trains to predict them using bidirectional context, learning deep representations effective for various downstream tasks."
+    },
+    {
+      "question": "What are the main advantages of transformer-based models?",
+      "answer": "Advantages include: parallel processing for faster training, better long-range dependency modeling, unified architecture for multiple tasks, and scalable to billions of parameters."
+    }
+  ]
+}

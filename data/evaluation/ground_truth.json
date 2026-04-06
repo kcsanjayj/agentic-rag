@@ -1,0 +1,36 @@
+{
+  "qa_pairs": [
+    {
+      "id": "qa_001",
+      "query": "What is this document about?",
+      "expected_answer": "This is a sample PDF file designed for testing purposes",
+      "source_document": "sample-100kb.pdf",
+      "difficulty": "easy",
+      "category": "summarization",
+      "created_at": "2026-03-29T21:30:49.116962",
+      "metrics": {}
+    },
+    {
+      "id": "qa_002",
+      "query": "What is the file size of this document?",
+      "expected_answer": "approximately 100KB",
+      "source_document": "sample-100kb.pdf",
+      "difficulty": "easy",
+      "category": "extraction",
+      "created_at": "2026-03-29T21:30:49.117971",
+      "metrics": {}
+    },
+    {
+      "id": "qa_003",
+      "query": "What are the main use cases for this document?",
+      "expected_answer": "mobile app testing, PDF rendering validation, email attachments",
+      "source_document": "sample-100kb.pdf",
+      "difficulty": "medium",
+      "category": "extraction",
+      "created_at": "2026-03-29T21:30:49.117971",
+      "metrics": {}
+    }
+  ],
+  "updated_at": "2026-03-29T21:30:49.117971",
+  "count": 3
+}

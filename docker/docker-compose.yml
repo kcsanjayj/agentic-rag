@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  agentic-rag:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./scripts:/app/scripts
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=false
+      - CHROMA_DB_PATH=/app/data/chroma_db
+      - CACHE_DIR=/app/data/cache
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/app/logs/agentic-rag.log
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Optional: Add Nginx for reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - agentic-rag
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    driver: bridge

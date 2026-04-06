@@ -1,0 +1,135 @@
+# ==============================
+
+# 🐍 Python
+
+# ==============================
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+
+.env
+.venv
+env/
+venv/
+ENV/
+
+# ==============================
+
+# 🧠 AI / RAG / Vector DB (IMPORTANT)
+
+# ==============================
+
+backend/data/
+backend/data/chroma_db/
+backend/data/uploads/
+backend/data/cache/
+
+# Keep folder structure (optional)
+
+!backend/data/.gitkeep
+
+# ==============================
+
+# 📦 Build / Distribution
+
+# ==============================
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ==============================
+
+# 🧪 Testing & Coverage
+
+# ==============================
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# ==============================
+
+# 🗄️ Databases
+
+# ==============================
+
+*.db
+*.sqlite
+*.sqlite3
+
+# ==============================
+
+# 📁 Logs & Temp
+
+# ==============================
+
+logs/
+*.log
+temp/
+tmp/
+*.tmp
+
+# ==============================
+
+# 🔐 Secrets & Config
+
+# ==============================
+
+.env.*
+*.key
+*.pem
+*.crt
+
+# ==============================
+
+# ⚙️ IDE / Editor
+
+# ==============================
+
+.vscode/
+.idea/
+*.iml
+
+# ==============================
+
+# 🌐 Frontend
+
+# ==============================
+
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# ==============================
+
+# 📄 OS Files
+
+# ==============================
+
+.DS_Store
+Thumbs.db
+
+# ==============================
+
+# 📦 Archives
+
+# ==============================
+
+*.zip
+*.tar.gz
+*.rar
+
+# ==============================
+
+# 🧾 Misc
+
+# ==============================
+
+scripts/*.log
