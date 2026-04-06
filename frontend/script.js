@@ -416,7 +416,7 @@ class AGENTIC_RAG {
             // Backend connected successfully - no message shown
         } catch (error) {
             console.error('Backend health check failed:', error);
-            this.addMessage('⚠️ Backend connection failed. The app will run in demo mode. Please check if the backend server is running on port 8000.', 'assistant');
+            this.addMessage('⚠️ Backend connection failed. The app will run in demo mode. Please check if the backend server is running at https://agentic-rag.onrender.com', 'assistant');
         }
     }
 
