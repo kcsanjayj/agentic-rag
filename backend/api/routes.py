@@ -144,8 +144,8 @@ async def upload_document(file: UploadFile = File(...)):
         logger.info("Clearing old documents from vector store...")
         await vector_store.clear_collection()
         
-# Split into chunks using RecursiveCharacterTextSplitter
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        # Split into chunks using RecursiveCharacterTextSplitter
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=800,  # 🔥 Simple pipeline: 800 size
             chunk_overlap=100  # 🔥 Simple overlap
