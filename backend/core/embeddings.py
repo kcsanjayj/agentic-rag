@@ -1,85 +1,58 @@
 """
-Embedding generation for documents and queries
+Embedding generation using Gemini API (lightweight, no heavy ML models)
 """
 
 import asyncio
 from typing import List
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
 from backend.utils.logger import setup_logger
 from backend.config import settings
 
 logger = setup_logger(__name__)
 
+# Configure Gemini API
+def configure_gemini():
+    """Configure Gemini with available API key"""
+    api_keys = settings.get_api_keys("gemini")
+    if api_keys:
+        genai.configure(api_key=api_keys[0])
+        return True
+    return False
 
-class EmbeddingManager:
-    """Singleton manager for embedding model to avoid reloading"""
-    _model = None
-    _model_name = None
-    _device = None
-    
-    @classmethod
-    def get_model(cls, model_name: str, device: str):
-        """Get or create singleton embedding model instance"""
-        if cls._model is None or cls._model_name != model_name or cls._device != device:
-            logger.info(f"Loading embedding model: {model_name}")
-            cls._model = SentenceTransformer(model_name, device=device)
-            cls._model_name = model_name
-            cls._device = device
-            logger.info(f"Embedding model loaded successfully")
-        return cls._model
+# Initialize on module load (lazy - will retry if key not available yet)
+_gemini_configured = False
+
+def ensure_gemini_configured():
+    global _gemini_configured
+    if not _gemini_configured:
+        _gemini_configured = configure_gemini()
+    return _gemini_configured
 
 
 class EmbeddingGenerator:
-    """Generates embeddings using sentence transformers with lazy loading"""
+    """Generates embeddings using Gemini API (lightweight, cloud-based)"""
     
     def __init__(self):
-        self.model_name = settings.EMBEDDING_MODEL
-        self.device = settings.EMBEDDING_DEVICE
-        self.normalize = getattr(settings, 'EMBEDDING_NORMALIZE', True)
-        self.query_prefix = getattr(settings, 'EMBEDDING_PREFIX_QUERY', '')
-        self.doc_prefix = getattr(settings, 'EMBEDDING_PREFIX_DOC', '')
-        self._model = None  # Lazy loading - don't load at startup
-        logger.info(f"Embedding generator ready (model not loaded yet)")
-    
-    @property
-    def model(self):
-        """Lazy load model only when first accessed"""
-        if self._model is None:
-            self._model = EmbeddingManager.get_model(self.model_name, self.device)
-        return self._model
+        self.model_name = "models/embedding-001"
+        logger.info(f"Embedding generator ready (Gemini API-based)")
     
     async def generate_embedding(self, text: str, is_query: bool = False) -> List[float]:
-        """Generate embedding for a single text with BGE prefix support"""
+        """Generate embedding for a single text using Gemini API"""
         try:
-            # Add prefix for BGE models (better retrieval quality)
-            if is_query and self.query_prefix:
-                text = self.query_prefix + text
-            elif not is_query and self.doc_prefix:
-                text = self.doc_prefix + text
-            
-            # Run in thread pool to avoid blocking
+            ensure_gemini_configured()
             loop = asyncio.get_event_loop()
-            
-            if self.normalize:
-                embedding = await loop.run_in_executor(
-                    None, 
-                    lambda: self.model.encode(text, normalize_embeddings=True)
-                )
-            else:
-                embedding = await loop.run_in_executor(
-                    None, 
-                    self.model.encode,
-                    text
-                )
-            
-            return embedding.tolist()
+            embedding = await loop.run_in_executor(
+                None,
+                lambda: genai.embed_content(model=self.model_name, content=text)["embedding"]
+            )
+            return embedding
         except Exception as e:
             logger.error(f"Error generating embedding: {str(e)}")
             raise
     
     async def generate_query_embedding(self, query: str) -> List[float]:
-        """Generate embedding specifically for queries (with prefix)"""
+        """Generate embedding specifically for queries"""
         return await self.generate_embedding(query, is_query=True)
     
     async def generate_document_embedding(self, text: str) -> List[float]:
@@ -89,51 +62,27 @@ class EmbeddingGenerator:
     async def generate_embeddings(self, texts: List[str], is_query: bool = False) -> List[List[float]]:
         """Generate embeddings for multiple texts"""
         try:
-            # Add prefixes if needed
-            if is_query and self.query_prefix:
-                texts = [self.query_prefix + t for t in texts]
-            elif not is_query and self.doc_prefix:
-                texts = [self.doc_prefix + t for t in texts]
-            
-            loop = asyncio.get_event_loop()
-            
-            if self.normalize:
-                embeddings = await loop.run_in_executor(
-                    None,
-                    lambda: self.model.encode(texts, normalize_embeddings=True)
-                )
-            else:
-                embeddings = await loop.run_in_executor(
-                    None,
-                    self.model.encode,
-                    texts
-                )
-            
-            return embeddings.tolist()
+            embeddings = []
+            for text in texts:
+                embedding = await self.generate_embedding(text, is_query=is_query)
+                embeddings.append(embedding)
+            return embeddings
         except Exception as e:
             logger.error(f"Error generating embeddings: {str(e)}")
             raise
     
     def get_embedding_dimension(self) -> int:
-        """Get the dimension of embeddings"""
-        if self.model:
-            return self.model.get_sentence_embedding_dimension()
-        return 0
+        """Get the dimension of embeddings (Gemini embedding-001 is 768d)"""
+        return 768
     
     async def similarity(self, text1: str, text2: str, text1_is_query: bool = False) -> float:
         """Calculate cosine similarity between two texts"""
         try:
             embedding1 = await self.generate_embedding(text1, is_query=text1_is_query)
             embedding2 = await self.generate_embedding(text2, is_query=False)
-            
-            # For normalized embeddings, dot product = cosine similarity
-            if self.normalize:
-                similarity = np.dot(embedding1, embedding2)
-            else:
-                similarity = np.dot(embedding1, embedding2) / (
-                    np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
-                )
-            
+            similarity = np.dot(embedding1, embedding2) / (
+                np.linalg.norm(embedding1) * np.linalg.norm(embedding2)
+            )
             return float(similarity)
         except Exception as e:
             logger.error(f"Error calculating similarity: {str(e)}")
