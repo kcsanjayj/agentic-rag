@@ -4,7 +4,7 @@ class AGENTIC_RAG {
         this.attachEventListeners();
         this.isProcessing = false;
         this.typingTimeout = null;
-        this.apiBaseUrl = 'https://agentic-rag.onrender.com/api/v1';
+        this.apiBaseUrl = '/api/v1';
         this.initializeApp();
     }
 
