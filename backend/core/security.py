@@ -8,8 +8,11 @@ from fastapi import Header, HTTPException, Request
 from typing import Optional
 
 
-# API Secret for internal authentication
-API_SECRET = os.environ.get("API_SECRET", "dev-secret-change-in-production")
+# API Secret for internal authentication - MUST be set in environment
+API_SECRET = os.environ.get("API_SECRET")
+
+if not API_SECRET:
+    raise RuntimeError("API_SECRET environment variable must be set. Run: export API_SECRET=your-secure-random-key")
 
 
 def verify_api_key(x_api_key: Optional[str] = Header(None)):
@@ -60,16 +63,6 @@ def is_safe_input(query: str) -> tuple[bool, str]:
         return False, "Input contains too many special characters"
     
     return True, "OK"
-
-
-def sanitize_output(text: str) -> str:
-    """Sanitize LLM output to prevent XSS and other injection"""
-    # Remove any script tags
-    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.IGNORECASE | re.DOTALL)
-    # Remove event handlers
-    text = re.sub(r'\s*on\w+="[^"]*"', '', text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*on\w+='[^']*'", '', text, flags=re.IGNORECASE)
-    return text
 
 
 # Security Headers Middleware

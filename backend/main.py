@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import uvicorn
 import logging
+import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -39,6 +40,25 @@ logger = get_logger(__name__)
 
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
+
+# Environment-based CORS origins
+def get_allowed_origins():
+    """Get CORS allowed origins based on environment"""
+    if os.environ.get("ENV") == "production":
+        return [
+            "https://agentic-rag-gamma.vercel.app",
+            "https://agentic-rag.vercel.app",
+        ]
+    else:
+        # Development - include localhost
+        return [
+            "https://agentic-rag-gamma.vercel.app",
+            "https://agentic-rag.vercel.app",
+            "http://localhost:8000",
+            "http://localhost:3000",
+            "http://127.0.0.1:8000",
+            "http://127.0.0.1:3000",
+        ]
 
 
 def setup_logging():
@@ -62,13 +82,10 @@ def create_app() -> FastAPI:
     # Security headers middleware
     app.middleware("http")(add_security_headers)
     
-    # CORS middleware - restricted to specific origins
-    origins = [
-        "https://agentic-rag-gamma.vercel.app",  # Production frontend
-        "https://agentic-rag.vercel.app",
-        "http://localhost:8000",  # Local development
-        "http://localhost:3000",
-    ]
+    # CORS middleware - environment-based origins
+    origins = get_allowed_origins()
+    safe_log(logger, "info", "CORS origins configured", env=os.environ.get("ENV", "development"))
+    
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
