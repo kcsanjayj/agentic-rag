@@ -242,9 +242,14 @@ class AGENTIC_RAG {
                 });
             }
             
-            contentDiv.innerHTML = `<p style="white-space: pre-wrap;">${this.escapeHtml(fullResponse)}</p>`;
+            const p = document.createElement('p');
+            p.style.whiteSpace = 'pre-wrap';
+            p.textContent = fullResponse;
+            contentDiv.appendChild(p);
         } else {
-            contentDiv.innerHTML = `<p>${this.escapeHtml(content)}</p>`;
+            const p = document.createElement('p');
+            p.textContent = content;
+            contentDiv.appendChild(p);
         }
         
         // Add timestamp

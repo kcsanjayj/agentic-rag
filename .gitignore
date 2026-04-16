@@ -135,3 +135,5 @@ Thumbs.db
 scripts/*.log
 
 .vercel
+.env
+data/runtime_config.json
