@@ -3,11 +3,15 @@ Configuration settings for Agentic-RAG
 """
 
 import os
+import json
 import random
+import logging
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file (local development)
 load_dotenv()
@@ -15,20 +19,58 @@ load_dotenv()
 # Get project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# Runtime config file path
+RUNTIME_CONFIG_FILE = PROJECT_ROOT / "data" / "runtime_config.json"
+
 # Runtime configuration storage (replaces .env file)
 _runtime_config: Dict[str, Any] = {}
 
+def _load_runtime_config():
+    """Load runtime configuration from file"""
+    global _runtime_config
+    try:
+        if RUNTIME_CONFIG_FILE.exists():
+            with open(RUNTIME_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                _runtime_config = json.load(f)
+    except Exception as e:
+        print(f"Warning: Could not load runtime config: {e}")
+        _runtime_config = {}
+
+def _save_runtime_config():
+    """Save runtime configuration to file"""
+    try:
+        RUNTIME_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(RUNTIME_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_runtime_config, f, indent=2)
+    except Exception as e:
+        print(f"Warning: Could not save runtime config: {e}")
+
 def set_runtime_config(key: str, value: Any):
-    """Set runtime configuration value"""
+    """Set runtime configuration value and save to file"""
     _runtime_config[key] = value
+    _save_runtime_config()
 
 def get_runtime_config(key: str, default: Any = None) -> Any:
     """Get runtime configuration value"""
     return _runtime_config.get(key, default)
 
 def update_runtime_config(updates: Dict[str, Any]):
-    """Update multiple runtime configuration values"""
+    """Update multiple runtime configuration values and save to file"""
     _runtime_config.update(updates)
+    _save_runtime_config()
+
+def clear_runtime_config():
+    """Clear all runtime configuration and remove file"""
+    global _runtime_config
+    _runtime_config = {}
+    try:
+        if RUNTIME_CONFIG_FILE.exists():
+            RUNTIME_CONFIG_FILE.unlink()
+    except Exception as e:
+        print(f"Warning: Could not remove runtime config file: {e}")
+
+# Load existing runtime config on module import
+_load_runtime_config()
 
 
 class Settings(BaseSettings):
@@ -58,7 +100,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_API_KEY_2: Optional[str] = None
     GEMINI_API_KEY_3: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-1.5-flash"  # Free model
+    GEMINI_MODEL: str = ""  # Empty - will be auto-selected from API
     GEMINI_TEMPERATURE: float = 0.2
     
     # Anthropic Settings
@@ -75,7 +117,7 @@ class Settings(BaseSettings):
     
     # NVIDIA Settings
     NVIDIA_API_KEY: Optional[str] = None
-    NVIDIA_MODEL: str = "meta/llama3-70b-instruct"
+    NVIDIA_MODEL: str = "meta/llama-3.1-70b-instruct"
     NVIDIA_TEMPERATURE: float = 0.1
     NVIDIA_MAX_TOKENS: int = 4096
     
@@ -114,7 +156,6 @@ class Settings(BaseSettings):
     
     # Query Rewriting settings - DISABLED for speed
     ENABLE_QUERY_REWRITING: bool = False  # Disabled for fast retrieval
-    ENABLE_QUERY_REWRITING: bool = False  # 🔥 Disabled for fast retrieval
     QUERY_REWRITE_TEMPERATURE: float = 0.1
     MAX_ITERATIONS: int = 3
     TIMEOUT_SECONDS: int = 30
@@ -156,6 +197,30 @@ class Settings(BaseSettings):
         keys = self.get_api_keys(provider)
         return random.choice(keys) if keys else None
     
+    def get_available_providers(self) -> List[str]:
+        """Get list of providers that have API keys configured"""
+        providers = ["openai", "gemini", "anthropic", "nvidia", "groq", "huggingface", "local"]
+        available = []
+        for provider in providers:
+            if provider == "local":
+                available.append(provider)  # Local doesn't need API key
+            elif self.get_api_keys(provider):
+                available.append(provider)
+        return available
+    
+    def auto_select_provider(self) -> str:
+        """Auto-select the first available provider with valid API key"""
+        available = self.get_available_providers()
+        
+        # Priority order: gemini -> openai -> anthropic -> nvidia -> groq -> huggingface -> local
+        priority = ["gemini", "openai", "anthropic", "nvidia", "groq", "huggingface", "local"]
+        
+        for provider in priority:
+            if provider in available:
+                return provider
+        
+        return "local"  # Fallback to local
+    
     def get_ai_config(self):
         """Get AI configuration based on selected provider - check runtime config first"""
         # Check runtime config first
@@ -164,12 +229,55 @@ class Settings(BaseSettings):
         
         api_key = self.get_random_api_key(provider)
         
+        # AUTO-DETECT: If current provider has no API key, switch to first available
+        if not api_key and provider != "local":
+            available = self.get_available_providers()
+            if available:
+                new_provider = available[0]  # Use first available
+                print(f"Auto-switching from {provider} to {new_provider} (no API key found)")
+                provider = new_provider
+                api_key = self.get_random_api_key(provider)
+        
+        # Get custom model from runtime config if available
+        custom_model = get_runtime_config(f"{provider.upper()}_MODEL")
+        
+        # Use model manager for validation and fallbacks
+        try:
+            from backend.agents.model_manager import ModelManager
+            model_manager = ModelManager()
+            
+            # Normalize and validate model name
+            if custom_model:
+                custom_model = model_manager.normalize_model_name(provider, custom_model)
+            
+            # Get valid model (uses fallback if invalid or empty)
+            model = model_manager.get_valid_model(provider, custom_model or getattr(self, f"{provider.upper()}_MODEL", ""))
+            
+            logger.info(f"Model manager selected model: {model} for provider: {provider}")
+            
+        except Exception as e:
+            logger.warning(f"Model manager not available, using default: {str(e)}")
+            # Fallback to old method
+            fallback_models = {
+                "gemini": "gemini-1.5-flash",
+                "openai": "gpt-3.5-turbo",
+                "anthropic": "claude-3-haiku-20240307",
+                "nvidia": "meta/llama-3.1-70b-instruct",
+                "groq": "llama3-8b-8192",
+                "huggingface": "mistralai/Mistral-7B-Instruct-v0.2"
+            }
+            model = custom_model or getattr(self, f"{provider.upper()}_MODEL", "") or fallback_models.get(provider, "")
+        
+        temperature = get_runtime_config(f"{provider.upper()}_TEMPERATURE")
+        if temperature is None:
+            temperature = getattr(self, f"{provider.upper()}_TEMPERATURE", 0.1)
+
         if provider == "openai":
             return {
                 "provider": "openai",
                 "api_key": api_key,
-                "model": self.OPENAI_MODEL,
-                "temperature": self.OPENAI_TEMPERATURE,
+                "model": model,
+                "temperature": temperature,
                 "base_url": self.OPENAI_BASE_URL,
                 "available_keys": len(self.get_api_keys("openai"))
             }
@@ -177,48 +285,48 @@ class Settings(BaseSettings):
             return {
                 "provider": "gemini",
                 "api_key": api_key,
-                "model": self.GEMINI_MODEL,
-                "temperature": self.GEMINI_TEMPERATURE,
+                "model": model,
+                "temperature": temperature,
                 "available_keys": len(self.get_api_keys("gemini"))
             }
         elif provider == "anthropic":
             return {
                 "provider": "anthropic",
                 "api_key": api_key,
-                "model": self.ANTHROPIC_MODEL,
-                "temperature": self.ANTHROPIC_TEMPERATURE,
+                "model": model,
+                "temperature": temperature,
                 "available_keys": len(self.get_api_keys("anthropic"))
             }
         elif provider == "local":
             return {
                 "provider": "local",
                 "url": self.LOCAL_LLM_URL,
-                "model": self.LOCAL_LLM_MODEL,
-                "temperature": self.LOCAL_LLM_TEMPERATURE,
+                "model": model or "llama2",
+                "temperature": temperature,
                 "available_keys": 0
             }
         elif provider == "nvidia":
             return {
                 "provider": "nvidia",
                 "api_key": api_key,
-                "model": self.NVIDIA_MODEL,
-                "temperature": self.NVIDIA_TEMPERATURE,
+                "model": model,
+                "temperature": temperature,
                 "available_keys": len(self.get_api_keys("nvidia"))
             }
         elif provider == "groq":
             return {
                 "provider": "groq",
                 "api_key": api_key,
-                "model": self.GROQ_MODEL,
-                "temperature": self.GROQ_TEMPERATURE,
+                "model": model,
+                "temperature": temperature,
                 "available_keys": len(self.get_api_keys("groq"))
             }
         elif provider == "huggingface":
             return {
                 "provider": "huggingface",
                 "api_key": api_key,
-                "model": self.HUGGINGFACE_MODEL,
-                "temperature": self.HUGGINGFACE_TEMPERATURE,
+                "model": model,
+                "temperature": temperature,
                 "available_keys": len(self.get_api_keys("huggingface"))
             }
         else:
@@ -226,7 +334,7 @@ class Settings(BaseSettings):
             return {
                 "provider": "openai",
                 "api_key": api_key,
-                "model": self.OPENAI_MODEL,
+                "model": model,
                 "temperature": self.OPENAI_TEMPERATURE,
                 "base_url": self.OPENAI_BASE_URL,
                 "available_keys": len(self.get_api_keys("openai"))

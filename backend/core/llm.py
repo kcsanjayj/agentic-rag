@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, List
 import openai
 import aiohttp
 from backend.utils.logger import setup_logger
-from backend.config import settings
+from backend.config import settings, get_runtime_config
 
 logger = setup_logger(__name__)
 
@@ -17,74 +17,90 @@ class LLMClient:
     """Client for interacting with multiple LLM providers"""
     
     def __init__(self):
-        self.config = settings.get_ai_config()
-        self.provider = self.config["provider"]
         self.client = None
         self._initialize_client()
+    
+    def _get_fresh_config(self):
+        """Get fresh configuration from settings (not cached)"""
+        return settings.get_ai_config()
     
     def _initialize_client(self):
         """Initialize the appropriate client based on provider"""
         try:
-            if self.provider == "openai":
-                if not self.config.get("api_key"):
+            config = self._get_fresh_config()
+            provider = config["provider"]
+            
+            if provider == "openai":
+                if not config.get("api_key"):
                     logger.warning("OpenAI API key not found, using mock responses")
                     self.client = None
                 else:
-                    client_kwargs = {"api_key": self.config["api_key"]}
-                    if self.config.get("base_url"):
-                        client_kwargs["base_url"] = self.config["base_url"]
+                    client_kwargs = {"api_key": config["api_key"]}
+                    if config.get("base_url"):
+                        client_kwargs["base_url"] = config["base_url"]
                     self.client = openai.OpenAI(**client_kwargs)
-                    logger.info(f"OpenAI client initialized with {self.config.get('available_keys', 1)} API key(s)")
+                    logger.info(f"OpenAI client initialized with {config.get('available_keys', 1)} API key(s)")
                     
-            elif self.provider == "gemini":
-                if not self.config.get("api_key"):
+            elif provider == "gemini":
+                if not config.get("api_key"):
                     logger.warning("Gemini API key not found, using mock responses")
                     self.client = None
                 else:
-                    self.client = self.config["api_key"]  # Store API key for Gemini
-                    logger.info(f"Gemini client initialized with {self.config.get('available_keys', 1)} API key(s)")
+                    self.client = config["api_key"]  # Store API key for Gemini
+                    logger.info(f"Gemini client initialized with {config.get('available_keys', 1)} API key(s)")
                     
-            elif self.provider == "anthropic":
-                if not self.config.get("api_key"):
+            elif provider == "anthropic":
+                if not config.get("api_key"):
                     logger.warning("Anthropic API key not found, using mock responses")
                     self.client = None
                 else:
-                    self.client = self.config["api_key"]  # Store API key for Anthropic
-                    logger.info(f"Anthropic client initialized with {self.config.get('available_keys', 1)} API key(s)")
+                    self.client = config["api_key"]  # Store API key for Anthropic
+                    logger.info(f"Anthropic client initialized with {config.get('available_keys', 1)} API key(s)")
                     
-            elif self.provider == "local":
-                self.client = self.config["url"]  # Store URL for local models
+            elif provider == "local":
+                self.client = config["url"]  # Store URL for local models
                 logger.info("Local LLM client initialized successfully")
                 
             else:
-                logger.warning(f"Unknown provider: {self.provider}, using mock responses")
+                logger.warning(f"Unknown provider: {provider}, using mock responses")
                 self.client = None
                 
         except Exception as e:
-            logger.error(f"Error initializing {self.provider} client: {str(e)}")
+            logger.error(f"Error initializing client: {str(e)}")
             self.client = None
     
     async def generate_response(self, prompt: str, temperature: Optional[float] = None,
                               max_tokens: int = 1000, model: Optional[str] = None) -> str:
         """Generate a response from the LLM with multi-provider fallback"""
         try:
-            # Try providers in order: Gemini -> OpenAI -> Anthropic -> NVIDIA -> Groq -> HuggingFace -> Local -> Mock
-            providers_to_try = ["gemini", "openai", "anthropic", "nvidia", "groq", "huggingface", "local"]
+            # Try selected provider first, then fail over to others.
+            preferred_provider = self._get_fresh_config().get("provider", "gemini")
+            fallback_order = ["gemini", "openai", "anthropic", "nvidia", "groq", "huggingface", "local"]
+            providers_to_try = [preferred_provider] + [p for p in fallback_order if p != preferred_provider]
+            
+            logger.info("=" * 60)
+            logger.info("🔍 STARTING PROVIDER SEARCH")
+            logger.info("=" * 60)
             
             for provider in providers_to_try:
                 try:
                     config = self._get_provider_config(provider)
                     api_key = config.get("api_key")
-                    logger.info(f"Trying provider: {provider}, has_api_key: {bool(api_key)}")
+                    
+                    # Detailed logging
+                    logger.info(f"📋 Provider: {provider}")
+                    logger.info(f"   - Has API Key: {bool(api_key)}")
+                    logger.info(f"   - API Key (first 10 chars): {api_key[:10] if api_key else 'None'}...")
+                    logger.info(f"   - Model: {config.get('model')}")
                     
                     if not api_key and provider != "local":
-                        logger.warning(f"Skipping {provider} - no API key configured")
+                        logger.warning(f"⚠️  Skipping {provider} - no API key configured")
                         continue  # Skip if no API key
                     
                     temp = temperature if temperature is not None else config.get("temperature", 0.1)
                     model_name = model if model else config.get("model")
                     
-                    logger.info(f"Attempting {provider} with model: {model_name}")
+                    logger.info(f"🚀 Attempting {provider} with model: {model_name}")
                     
                     if provider == "openai":
                         return await self._generate_openai_response(prompt, temp, max_tokens, model_name)
@@ -102,48 +118,68 @@ class LLMClient:
                         return await self._generate_local_response(prompt, temp, max_tokens, model_name)
                         
                 except Exception as e:
-                    logger.warning(f"Provider {provider} failed: {str(e)}")
+                    logger.error(f"❌ Provider {provider} FAILED: {str(e)}")
+                    logger.info(f"   → Trying next provider...")
                     continue  # Try next provider
             
-            # All providers failed - raise error instead of mock
-            logger.error("All AI providers failed - no API keys configured")
-            raise Exception("No AI provider is configured. Please set up API keys in .env file")
+            # All providers failed - degrade gracefully to deterministic fallback.
+            logger.error("=" * 60)
+            logger.error("❌ ALL AI PROVIDERS FAILED")
+            logger.error("=" * 60)
+            logger.warning("Falling back to mock response because no provider completed successfully")
+            return await self._generate_mock_response(prompt)
                 
         except Exception as e:
             logger.error(f"Error generating response: {str(e)}")
-            raise
+            logger.warning("Returning mock response due to generation exception")
+            return await self._generate_mock_response(prompt)
     
     def _get_provider_config(self, provider: str) -> Dict[str, Any]:
         """Get config for a specific provider"""
+        runtime_model = get_runtime_config(f"{provider.upper()}_MODEL")
+        runtime_temp = get_runtime_config(f"{provider.upper()}_TEMPERATURE")
+
         if provider == "openai":
             return {
                 "api_key": settings.get_random_api_key("openai"),
-                "model": settings.OPENAI_MODEL,
-                "temperature": settings.OPENAI_TEMPERATURE
+                "model": runtime_model or settings.OPENAI_MODEL,
+                "temperature": runtime_temp if runtime_temp is not None else settings.OPENAI_TEMPERATURE
             }
         elif provider == "gemini":
             return {
                 "api_key": settings.get_random_api_key("gemini"),
-                "model": settings.GEMINI_MODEL,
-                "temperature": settings.GEMINI_TEMPERATURE
+                "model": runtime_model or settings.GEMINI_MODEL or "gemini-1.5-flash",
+                "temperature": runtime_temp if runtime_temp is not None else settings.GEMINI_TEMPERATURE
             }
         elif provider == "anthropic":
             return {
                 "api_key": settings.get_random_api_key("anthropic"),
-                "model": settings.ANTHROPIC_MODEL,
-                "temperature": settings.ANTHROPIC_TEMPERATURE
+                "model": runtime_model or settings.ANTHROPIC_MODEL,
+                "temperature": runtime_temp if runtime_temp is not None else settings.ANTHROPIC_TEMPERATURE
             }
         elif provider == "local":
             return {
                 "url": settings.LOCAL_LLM_URL,
-                "model": settings.LOCAL_LLM_MODEL,
-                "temperature": settings.LOCAL_LLM_TEMPERATURE
+                "model": runtime_model or settings.LOCAL_LLM_MODEL,
+                "temperature": runtime_temp if runtime_temp is not None else settings.LOCAL_LLM_TEMPERATURE
             }
         elif provider == "nvidia":
             return {
                 "api_key": settings.get_random_api_key("nvidia"),
-                "model": settings.NVIDIA_MODEL,
-                "temperature": settings.NVIDIA_TEMPERATURE
+                "model": runtime_model or settings.NVIDIA_MODEL,
+                "temperature": runtime_temp if runtime_temp is not None else settings.NVIDIA_TEMPERATURE
+            }
+        elif provider == "groq":
+            return {
+                "api_key": settings.get_random_api_key("groq"),
+                "model": runtime_model or settings.GROQ_MODEL,
+                "temperature": runtime_temp if runtime_temp is not None else settings.GROQ_TEMPERATURE
+            }
+        elif provider == "huggingface":
+            return {
+                "api_key": settings.get_random_api_key("huggingface"),
+                "model": runtime_model or settings.HUGGINGFACE_MODEL,
+                "temperature": runtime_temp if runtime_temp is not None else settings.HUGGINGFACE_TEMPERATURE
             }
         return {}
     
@@ -432,7 +468,7 @@ USE CASES
 EVIDENCE
 ----------------------------------------
 - Source: Mock response (AI not configured)
-- Note: Configure OpenAI, Gemini, or Anthropic API key for live AI responses
+- Note: Configure provider + API key in the app UI for live AI responses
 
 ----------------------------------------
 DECISION RATIONALE
@@ -526,12 +562,13 @@ Key Points:"""
     
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the current model"""
+        config = self._get_fresh_config()
         return {
-            "provider": self.provider,
-            "model": self.config.get("model"),
-            "temperature": self.config.get("temperature"),
+            "provider": config["provider"],
+            "model": config.get("model"),
+            "temperature": config.get("temperature"),
             "api_available": self.client is not None and settings.is_ai_configured(),
             "configured": settings.is_ai_configured(),
-            "available_keys": self.config.get("available_keys", 1),
-            "base_url": self.config.get("base_url") if self.provider == "openai" else None
+            "available_keys": config.get("available_keys", 1),
+            "base_url": config.get("base_url") if config["provider"] == "openai" else None
         }

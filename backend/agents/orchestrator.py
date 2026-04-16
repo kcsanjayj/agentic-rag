@@ -15,6 +15,13 @@ import uuid
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from backend.agents.agents import PlannerAgent, ReasoningAgent, CriticAgent, RetryAgent
+from backend.agents.cross_encoder_ranker_agent import CrossEncoderRankerAgent
+from backend.agents.multimodal_retrieval_agent import MultimodalRetrievalAgent
+from backend.agents.visual_parsing_agent import VisualParsingAgent
+from backend.agents.table_extraction_agent import TableExtractionAgent
+from backend.agents.fact_verification_agent import FactVerificationAgent
+from backend.agents.conflict_resolution_agent import ConflictResolutionAgent
+from backend.agents.meta_data_enrichment_agent import MetaDataEnrichmentAgent
 from backend.core.embeddings import EmbeddingGenerator
 from backend.utils.logger import setup_logger
 from backend.models.schemas import QueryRequest, QueryResponse
@@ -157,10 +164,13 @@ class ReasoningEngine:
     """Generate intelligent responses using LLM"""
     
     def __init__(self):
-        self.llm = LLMClient()
+        self.llm = None  # Will be created fresh for each query
     
     async def generate(self, context: str, task: str, memory_context: str = "") -> str:
         """Generate response with structured prompt"""
+        
+        # Create fresh LLMClient for each query to pick up new config
+        self.llm = LLMClient()
         
         task_prompts = {
             "compare_documents": "Compare documents focusing on similarities/differences.",
@@ -282,13 +292,20 @@ class Orchestrator:
     """
     🧠 Professional Agentic RAG Orchestrator
     
-    Combines all 6 components:
+    Combines all 13 components:
     1. PLANNER - Decision Maker
     2. ADAPTIVE RETRIEVER - Dynamic Retrieval  
     3. REASONING ENGINE - LLM Core
     4. CRITIC - Self-Evaluation
     5. RETRY HANDLER - Autonomy
     6. MEMORY - Multi-step Intelligence
+    7. CROSS ENCODER RANKER - Document Re-ranking
+    8. MULTIMODAL RETRIEVAL - Cross-modal Search
+    9. VISUAL PARSING - Image Content Extraction
+    10. TABLE EXTRACTION - Structured Data Parsing
+    11. FACT VERIFICATION - Hallucination Detection
+    12. CONFLICT RESOLUTION - Source Reconciliation
+    13. METADATA ENRICHMENT - Document Enhancement
     """
     
     def __init__(self):
@@ -299,7 +316,16 @@ class Orchestrator:
         self.vector_store = get_vector_store()
         self._query_cache = {}  # Simple in-memory cache for repeated queries
         
-        logger.info("🧠 Orchestrator initialized with 6-component agentic system + query caching")
+        # Initialize new agents
+        self.cross_encoder = CrossEncoderRankerAgent()
+        self.multimodal_retrieval = MultimodalRetrievalAgent()
+        self.visual_parsing = VisualParsingAgent()
+        self.table_extraction = TableExtractionAgent()
+        self.fact_verification = FactVerificationAgent()
+        self.conflict_resolution = ConflictResolutionAgent()
+        self.meta_data_enrichment = MetaDataEnrichmentAgent()
+        
+        logger.info("🧠 Orchestrator initialized with 6-component agentic system + 7 new specialized agents + query caching")
     
     def _get_cached_response(self, query: str, doc_id: str) -> Optional[Dict[str, Any]]:
         """Check if query result is cached"""
@@ -422,9 +448,12 @@ class Orchestrator:
             
         except Exception as e:
             logger.error(f"❌ Orchestrator error: {str(e)}")
+            raw_error = str(e)
+            if "No AI provider is configured" in raw_error or ".env" in raw_error:
+                raw_error = "No active AI provider is available. Configure provider/API key in AI Config, or use Local Ollama."
             return QueryResponse(
                 query=request.query,
-                answer=f"Error: {str(e)}",
+                answer=f"Error: {raw_error}",
                 sources=[],
                 agent_steps=[{"error": str(e)}],
                 processing_time=time.time() - start_time,

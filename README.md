@@ -7,7 +7,7 @@
 🚀 Multi-agent RAG with evaluation gating  
 📉 25% reduction in hallucinations (vs baseline RAG)  
 📊 +21% relevance improvement  
-⚡ 7 LLM providers supported  
+⚡ 7 Cloud LLM providers (API-based, online only)  
 
 💡 From basic RAG → self-correcting AI system
 
@@ -84,7 +84,8 @@ Query → Retrieval → Generation → Critic → Evaluation → Final Answer
 - Evaluation gating
 - Hybrid retrieval (dense + sparse)
 - Execution trace
-- UI-based config
+- UI-based API key configuration
+- Runtime configuration (no .env file needed)
 
 ---
 
@@ -94,7 +95,7 @@ Query → Retrieval → Generation → Critic → Evaluation → Final Answer
 |-----------|------------|
 | Framework | FastAPI |
 | Vector DB | ChromaDB |
-| LLMs | OpenAI, Gemini, Claude, NVIDIA, Groq, HuggingFace, Ollama |
+| LLMs | OpenAI, Gemini, Claude, NVIDIA, Groq, HuggingFace (Cloud APIs - keys required) |
 | Embeddings | sentence-transformers |
 | Frontend | Vanilla JS |
 
@@ -109,7 +110,9 @@ pip install -r requirements.txt
 python start.py
 ```
 
-Open http://localhost:8000 → Click **AI Config** → Select provider → Start chatting.
+Open http://localhost:8000 → Click **AI Config** → Enter your API key → Select provider → Start chatting.
+
+> ⚠️ **Online Only**: This system requires API keys for cloud LLM providers. No local model support.
 
 ---
 

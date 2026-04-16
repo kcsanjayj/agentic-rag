@@ -5,6 +5,7 @@ API routes for Agentic-RAG
 import os
 import time
 import uuid
+import asyncio
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
@@ -25,6 +26,67 @@ import json
 
 logger = setup_logger(__name__)
 router = APIRouter(tags=["api"])
+
+MODEL_ALIASES = {
+    "nvidia": {
+        "meta/llama3-70b-instruct": "meta/llama-3.1-70b-instruct",
+        "meta/llama3.1-70b-instruct": "meta/llama-3.1-70b-instruct",
+        "meta/llama3.1-8b-instruct": "meta/llama-3.1-8b-instruct",
+        "meta/llama3.1-405b-instruct": "meta/llama-3.1-405b-instruct"
+    },
+    "gemini": {
+        "gemini-pro": "gemini-1.5-flash",
+        "gemini-1.5-flash-001": "gemini-1.5-flash"
+    }
+}
+
+PROVIDER_FALLBACK_MODELS = {
+    "gemini": [
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro"
+    ],
+    "openai": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo"
+    ],
+    "anthropic": [
+        "claude-3-5-sonnet-20240620",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307"
+    ],
+    "nvidia": [
+        "meta/llama-3.1-70b-instruct",
+        "meta/llama-3.1-405b-instruct",
+        "meta/llama-3.1-8b-instruct",
+        "mistralai/mistral-large"
+    ],
+    "groq": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+    ],
+    "huggingface": [
+        "mistralai/Mistral-7B-Instruct-v0.2",
+        "meta-llama/Llama-2-7b-chat-hf",
+        "google/gemma-7b-it",
+        "tiiuae/falcon-7b-instruct"
+    ],
+    "local": [
+        "llama3.1:8b",
+        "llama3:8b",
+        "mistral:7b",
+        "qwen2.5:7b",
+        "phi3:mini"
+    ]
+}
 
 # Global components (in production, use dependency injection)
 orchestrator = None
@@ -62,6 +124,13 @@ def get_active_document():
     return {"id": active_document_id, "filename": active_document_name}
 
 
+def _normalize_provider_model(provider: str, model: str) -> str:
+    """Normalize model aliases to provider-supported names."""
+    if not model:
+        return model
+    return MODEL_ALIASES.get(provider, {}).get(model, model)
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
     """Query documents using agentic RAG - filtered by active document"""
@@ -73,7 +142,7 @@ async def query_documents(request: QueryRequest):
         if not active_doc["id"]:
             return QueryResponse(
                 query=request.query,
-                answer="❌ No document uploaded yet. Please upload a resume first.",
+                answer="No document uploaded yet. Please upload a document first.",
                 sources=[],
                 agent_steps=[],
                 processing_time=0.0,
@@ -317,25 +386,6 @@ async def get_system_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/config")
-async def get_config():
-    """Get current AI configuration"""
-    try:
-        return {
-            "ai_provider": settings.AI_PROVIDER,
-            "ai_configured": settings.is_ai_configured(),
-            "config": settings.get_ai_config(),
-            "supported_providers": ["openai", "gemini", "anthropic", "local"],
-            "embedding_model": settings.EMBEDDING_MODEL,
-            "chunk_size": settings.CHUNK_SIZE,
-            "chunk_overlap": settings.CHUNK_OVERLAP
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting config: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/test-retrieval")
 async def test_retrieval():
     """Debug route to test retrieval pipeline"""
@@ -555,8 +605,16 @@ async def get_config():
         from backend.config import get_runtime_config
         provider = get_runtime_config("AI_PROVIDER") or settings.AI_PROVIDER
         
+        # Get API key and mask it for security
+        api_key = get_runtime_config(f"{provider.upper()}_API_KEY", "")
+        masked_key = ""
+        if api_key:
+            masked_key = api_key[:4] + "..." + api_key[-4:] if len(api_key) > 8 else "***"
+        
         return {
             "provider": provider,
+            "api_key": masked_key,
+            "has_api_key": bool(api_key),
             "model": get_runtime_config(f"{provider.upper()}_MODEL") or getattr(settings, f"{provider.upper()}_MODEL", ""),
             "temperature": get_runtime_config(f"{provider.upper()}_TEMPERATURE") or getattr(settings, f"{provider.upper()}_TEMPERATURE", 0.7),
             "configured": settings.is_ai_configured()
@@ -567,14 +625,55 @@ async def get_config():
 
 @router.post("/config")
 async def update_config(config_data: Dict[str, Any]):
-    """Update AI configuration using runtime config (no .env file needed)"""
+    """Update AI configuration using runtime config (no .env file needed) - auto-selects model"""
     try:
-        from backend.config import set_runtime_config, update_runtime_config
+        from backend.config import set_runtime_config, update_runtime_config, get_runtime_config
         
-        provider = config_data.get("provider", "gemini")
+        provider = config_data.get("provider", "gemini").lower()
         api_key = config_data.get("api_key", "")
-        model = config_data.get("model", "")
+        model = _normalize_provider_model(provider, config_data.get("model", ""))
         temperature = config_data.get("temperature", 0.7)
+        
+        # If api_key is null/None, preserve existing key from runtime config
+        if api_key is None:
+            existing_key = get_runtime_config(f"{provider.upper()}_API_KEY", "")
+            api_key = existing_key
+            logger.info(f"Preserving existing API key for {provider}")
+        
+        # If no model specified, auto-select first available model
+        if not model and api_key and provider != "local":
+            try:
+                # List available models
+                models_result = await list_available_models({
+                    "provider": provider,
+                    "api_key": api_key
+                })
+                
+                if models_result.get("success") and models_result.get("first_model"):
+                    model = models_result["first_model"]
+                    logger.info(f"Auto-selected model: {model} for provider: {provider}")
+            except Exception as e:
+                logger.warning(f"Could not auto-select model: {str(e)}")
+
+        # Validate provider/model now. If model fails but alternatives exist, auto-fallback.
+        if provider != "local" and api_key:
+            try:
+                test_result = await test_api_connection({
+                    "provider": provider,
+                    "api_key": api_key,
+                    "model": model
+                })
+                if (not test_result.get("success")) and test_result.get("error_type") == "model_not_found":
+                    models_result = await list_available_models({
+                        "provider": provider,
+                        "api_key": api_key
+                    })
+                    fallback_model = models_result.get("first_model")
+                    if fallback_model:
+                        model = fallback_model
+                        logger.info(f"Auto-fallback model selected: {model} for provider: {provider}")
+            except Exception as e:
+                logger.warning(f"Model validation/fallback skipped: {str(e)}")
         
         # Update runtime configuration (no .env file needed!)
         update_runtime_config({
@@ -584,35 +683,186 @@ async def update_config(config_data: Dict[str, Any]):
         
         if model:
             set_runtime_config(f"{provider.upper()}_MODEL", model)
-        if temperature:
+        if temperature is not None:
             set_runtime_config(f"{provider.upper()}_TEMPERATURE", temperature)
         
         return {
             "success": True,
-            "message": "Configuration updated successfully - no .env file needed!",
+            "message": "Configuration updated successfully - auto-selected model!" if not config_data.get("model") else "Configuration updated successfully!",
             "provider": provider,
             "model": model,
-            "temperature": temperature
+            "temperature": temperature,
+            "auto_selected": not bool(config_data.get("model"))
         }
         
     except Exception as e:
         logger.error(f"Error updating config: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/test-api")
-async def test_api_connection(test_data: Dict[str, Any]):
-    """Test API connection for a provider"""
+@router.post("/clear-config")
+async def clear_runtime_config_endpoint():
+    """Clear runtime configuration to reset to defaults"""
     try:
-        provider = test_data.get("provider", "")
-        api_key = test_data.get("api_key", "")
+        from backend.config import clear_runtime_config
+        clear_runtime_config()
+        return {
+            "success": True,
+            "message": "Runtime configuration cleared - will use defaults"
+        }
+    except Exception as e:
+        logger.error(f"Error clearing config: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/list-models")
+async def list_available_models(request: Dict[str, Any]):
+    """List available models for a provider by querying their API"""
+    try:
+        provider = request.get("provider", "").lower()
+        api_key = request.get("api_key", "")
         
-        if not provider or not api_key:
+        if not provider:
             return {
                 "success": False,
-                "error": "Provider and API key are required"
+                "error": "Provider is required"
+            }
+        if provider != "local" and not api_key:
+            return {
+                "success": False,
+                "error": "API key is required for this provider"
             }
         
-        # Test different providers
+        models = []
+        
+        if provider == "gemini":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        models = [m["name"].replace("models/", "") for m in result.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
+        
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/models"
+            headers = {"Authorization": f"Bearer {api_key}"}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=10) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        models = [m["id"] for m in result.get("data", []) if m.get("id", "").startswith(("gpt-", "chatgpt-"))]
+        
+        elif provider == "anthropic":
+            # Anthropic doesn't have a public models endpoint, return known models
+            models = PROVIDER_FALLBACK_MODELS["anthropic"]
+        
+        elif provider == "groq":
+            url = "https://api.groq.com/openai/v1/models"
+            headers = {"Authorization": f"Bearer {api_key}"}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=10) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        models = [m["id"] for m in result.get("data", [])]
+        
+        elif provider == "nvidia":
+            # NVIDIA known chat models (normalized names)
+            models = PROVIDER_FALLBACK_MODELS["nvidia"]
+        
+        elif provider == "huggingface":
+            models = PROVIDER_FALLBACK_MODELS["huggingface"]
+        
+        elif provider == "local":
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{settings.LOCAL_LLM_URL}/api/tags", timeout=5) as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            models = [m.get("name", "") for m in result.get("models", []) if m.get("name")]
+                        else:
+                            models = [settings.LOCAL_LLM_MODEL] + PROVIDER_FALLBACK_MODELS["local"]
+            except Exception:
+                models = [settings.LOCAL_LLM_MODEL] + PROVIDER_FALLBACK_MODELS["local"]
+
+        if not models:
+            models = PROVIDER_FALLBACK_MODELS.get(provider, [])
+        
+        return {
+            "success": True,
+            "provider": provider,
+            "models": models,
+            "first_model": models[0] if models else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing models: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@router.post("/test-api")
+async def test_api_connection(test_data: Dict[str, Any]):
+    """Test API connection for a specific provider only"""
+    try:
+        from backend.config import get_runtime_config
+        
+        provider = test_data.get("provider", "").lower()
+        api_key = test_data.get("api_key", "")
+        
+        # If api_key is null/empty/'existing', get from runtime config
+        if not api_key or api_key == 'existing':
+            api_key = get_runtime_config(f"{provider.upper()}_API_KEY", "")
+            if api_key:
+                logger.info(f"Using existing runtime config key for {provider} test")
+        
+        model = _normalize_provider_model(provider, test_data.get("model", ""))
+        
+        if not provider:
+            return {
+                "success": False,
+                "error": "Provider is required",
+                "error_type": "missing_provider"
+            }
+        
+        # Local provider doesn't need API key, but must be reachable
+        if provider == "local":
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{settings.LOCAL_LLM_URL}/api/tags", timeout=5) as response:
+                        if response.status != 200:
+                            return {
+                                "success": False,
+                                "error": "Local Ollama service is not reachable",
+                                "error_type": "local_unreachable",
+                                "status_code": response.status
+                            }
+                        payload = await response.json()
+                        models = [m.get("name", "") for m in payload.get("models", [])]
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Cannot connect to local Ollama at {settings.LOCAL_LLM_URL}: {str(e)}",
+                    "error_type": "local_unreachable"
+                }
+            return {
+                "success": True,
+                "message": "Local Ollama connection successful",
+                "available_models": models,
+                "error_type": None
+            }
+        
+        if not api_key:
+            return {
+                "success": False,
+                "error": f"{provider.capitalize()} API key is required",
+                "error_type": "missing_api_key"
+            }
+        
+        # Use default model if not provided
+        default_models = {provider_name: models[0] for provider_name, models in PROVIDER_FALLBACK_MODELS.items() if models}
+        
+        model = model or default_models.get(provider, "default")
+        
+        # Test only the specific provider
         if provider == "nvidia":
             url = "https://integrate.api.nvidia.com/v1/chat/completions"
             headers = {
@@ -620,7 +870,7 @@ async def test_api_connection(test_data: Dict[str, Any]):
                 "Content-Type": "application/json"
             }
             data = {
-                "model": "meta/llama3-70b-instruct",
+                "model": model,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 10
             }
@@ -631,21 +881,55 @@ async def test_api_connection(test_data: Dict[str, Any]):
                 "Content-Type": "application/json"
             }
             data = {
-                "model": "gpt-3.5-turbo",
+                "model": model,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 10
             }
         elif provider == "gemini":
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             headers = {"Content-Type": "application/json"}
             data = {
                 "contents": [{"parts": [{"text": "Hello"}]}],
                 "generationConfig": {"maxOutputTokens": 10}
             }
+        elif provider == "anthropic":
+            url = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            }
+            data = {
+                "model": model,
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": "Hello"}]
+            }
+        elif provider == "groq":
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": model,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 10
+            }
+        elif provider == "huggingface":
+            url = f"https://api-inference.huggingface.co/models/{model}"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "inputs": "Hello",
+                "parameters": {"max_new_tokens": 10}
+            }
         else:
             return {
                 "success": False,
-                "error": f"Provider {provider} not supported for testing"
+                "error": f"Provider '{provider}' not supported",
+                "error_type": "unsupported_provider"
             }
         
         async with aiohttp.ClientSession() as session:
@@ -653,18 +937,132 @@ async def test_api_connection(test_data: Dict[str, Any]):
                 if response.status == 200:
                     return {
                         "success": True,
-                        "message": f"{provider} API connection successful"
+                        "message": f"{provider.capitalize()} API connection successful with model: {model}",
+                        "error_type": None
                     }
                 else:
                     error_text = await response.text()
+                    error_json = {}
+                    try:
+                        error_json = await response.json()
+                    except:
+                        pass
+                    
+                    # Determine error type
+                    error_type = "unknown_error"
+                    if response.status == 400:
+                        error_type = "bad_request"
+                        # Try to extract more specific error from response
+                        try:
+                            error_detail = error_json.get("error", {}).get("message", "")
+                            if "model" in error_detail.lower():
+                                error_msg = f"Invalid model '{model}' for {provider}"
+                            elif "api key" in error_detail.lower():
+                                error_msg = f"Invalid API key for {provider}"
+                            else:
+                                error_msg = f"{provider.capitalize()} API error: {error_detail or 'Bad request - check model name'}"
+                        except:
+                            error_msg = f"{provider.capitalize()} API error: Bad request - check API key and model name"
+                    elif response.status == 401:
+                        error_type = "invalid_api_key"
+                        error_msg = f"Invalid API key for {provider}"
+                    elif response.status == 429:
+                        error_type = "quota_exceeded"
+                        error_msg = f"Quota exceeded for {provider} - check billing"
+                    elif response.status == 404:
+                        error_type = "model_not_found"
+                        error_msg = f"Model '{model}' not found for {provider}"
+                        # Auto-fallback to first available model for better UX.
+                        try:
+                            models_result = await list_available_models({
+                                "provider": provider,
+                                "api_key": api_key
+                            })
+                            fallback_model = models_result.get("first_model")
+                            if fallback_model and fallback_model != model:
+                                retry_result = await test_api_connection({
+                                    "provider": provider,
+                                    "api_key": api_key,
+                                    "model": fallback_model
+                                })
+                                if retry_result.get("success"):
+                                    return {
+                                        "success": True,
+                                        "message": f"{provider.capitalize()} API connection successful with fallback model: {fallback_model}",
+                                        "error_type": None,
+                                        "model": fallback_model,
+                                        "auto_selected": True
+                                    }
+                        except Exception as retry_error:
+                            logger.warning(f"Fallback model test failed: {str(retry_error)}")
+                    elif response.status == 500 or response.status == 502 or response.status == 503:
+                        error_type = "server_error"
+                        error_msg = f"{provider.capitalize()} server error - try again"
+                    else:
+                        error_msg = f"{provider.capitalize()} API error: {response.status}"
+                    
                     return {
                         "success": False,
-                        "error": f"{provider} API error: {response.status} - {error_text[:200]}"
+                        "error": error_msg,
+                        "error_type": error_type,
+                        "status_code": response.status,
+                        "details": error_text[:200]
                     }
         
+    except aiohttp.ClientConnectorError as e:
+        logger.error(f"Connection error testing API: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Cannot connect to {provider.capitalize()} - check internet connection",
+            "error_type": "connection_error"
+        }
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout testing API")
+        return {
+            "success": False,
+            "error": f"{provider.capitalize()} API timeout - server not responding",
+            "error_type": "timeout"
+        }
     except Exception as e:
         logger.error(f"Error testing API: {str(e)}")
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "error_type": "unknown_error"
+        }
+
+
+@router.get("/config-status")
+async def get_config_status():
+    """Get current provider status with health indication for UI badges."""
+    try:
+        from backend.config import get_runtime_config
+
+        provider = (get_runtime_config("AI_PROVIDER") or settings.AI_PROVIDER or "gemini").lower()
+        model = get_runtime_config(f"{provider.upper()}_MODEL") or getattr(settings, f"{provider.upper()}_MODEL", "")
+        api_key = get_runtime_config(f"{provider.upper()}_API_KEY", "")
+
+        test_result = await test_api_connection({
+            "provider": provider,
+            "api_key": api_key,
+            "model": model
+        })
+
+        return {
+            "provider": provider,
+            "model": model,
+            "active": bool(test_result.get("success")),
+            "status_text": "API Active" if test_result.get("success") else "API Inactive",
+            "details": test_result.get("message") or test_result.get("error", ""),
+            "error_type": test_result.get("error_type")
+        }
+    except Exception as e:
+        logger.error(f"Error getting config status: {str(e)}")
+        return {
+            "provider": "unknown",
+            "model": "",
+            "active": False,
+            "status_text": "API Inactive",
+            "details": str(e),
+            "error_type": "status_error"
         }

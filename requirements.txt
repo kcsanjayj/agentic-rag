@@ -7,11 +7,12 @@ aiofiles>=23.2.0
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 
-# AI (lightweight API-based)
+# AI - API-based Online Providers (No local models)
 google-generativeai>=0.3.0
 openai>=1.3.0
 langchain>=0.1.0
 langchain-text-splitters>=0.0.1
+anthropic>=0.21.0
 
 # Vector DB
 chromadb>=0.4.18
@@ -24,5 +25,4 @@ beautifulsoup4>=4.12.0
 # Utilities
 numpy>=1.24.0
 requests>=2.31.0
-python-dotenv>=1.0.0
 aiohttp>=3.9.0
