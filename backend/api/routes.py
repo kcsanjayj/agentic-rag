@@ -15,6 +15,10 @@ from backend.models.schemas import (
     QueryRequest, QueryResponse, DocumentUploadResponse,
     DocumentInfo, HealthResponse
 )
+from backend.core.security import (
+    is_safe_input, sanitize_output, validate_query_length,
+    verify_api_key, MAX_FILE_SIZE
+)
 from backend.agents.orchestrator import Orchestrator
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from backend.tools.document_loader import DocumentLoader
@@ -136,19 +140,23 @@ def _normalize_provider_model(provider: str, model: str) -> str:
     return MODEL_ALIASES.get(provider, {}).get(model, model)
 
 
-@router.post("/query", response_model=QueryResponse)
+@router.post("/query", response_model=QueryResponse, dependencies=[Depends(verify_api_key)])
 @limiter.limit("10/minute")  # Rate limiting: 10 requests per minute per IP
 async def query_documents(request: Request, query_request: QueryRequest):
-    """Query documents using agentic RAG - filtered by active document with input validation"""
+    """Query documents using agentic RAG - filtered by active document with input validation and prompt injection protection"""
     try:
         safe_log(logger, "info", "Processing query request")
         
-        # 🛡️ Input validation
-        if not query_request.query:
-            raise HTTPException(status_code=400, detail="Query cannot be empty")
+        # 🛡️ Prompt injection protection
+        is_safe, reason = is_safe_input(query_request.query)
+        if not is_safe:
+            safe_log(logger, "warning", "Unsafe input detected", reason=reason)
+            raise HTTPException(status_code=400, detail=f"Unsafe input: {reason}")
         
-        if len(query_request.query) > 2000:
-            raise HTTPException(status_code=400, detail="Query too long (max 2000 characters)")
+        # 🛡️ Input validation
+        is_valid, reason = validate_query_length(query_request.query)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=reason)
         
         # 🎯 Check if we have an active document
         active_doc = get_active_document()
@@ -176,10 +184,10 @@ async def query_documents(request: Request, query_request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/upload", response_model=DocumentUploadResponse)
+@router.post("/upload", response_model=DocumentUploadResponse, dependencies=[Depends(verify_api_key)])
 @limiter.limit("5/minute")  # Rate limiting: 5 uploads per minute per IP
 async def upload_document(request: Request, file: UploadFile = File(...)):
-    """Upload and process a document with validation"""
+    """Upload and process a document with validation and size limit"
     logger.info(f"=== UPLOAD STARTED ===")
     logger.info(f"Received file: {file}")
     file_path = None
@@ -201,6 +209,15 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 status_code=400, 
                 detail=f"Unsupported file format. Supported: {', '.join(document_loader.get_supported_formats())}"
             )
+        
+        # Validate file size
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)}MB)"
+            )
+        await file.seek(0)  # Reset file pointer after reading
         
         # Save uploaded file
         upload_dir = "data/uploads"

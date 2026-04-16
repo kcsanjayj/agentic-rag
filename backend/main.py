@@ -16,10 +16,10 @@ if backend_dir not in sys.path:
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from fastapi import FastAPI, Request, JSONResponse
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse as FastApiJSONResponse
+from fastapi.responses import JSONResponse
 import uvicorn
 import logging
 from slowapi import Limiter
@@ -27,6 +27,7 @@ from slowapi.util import get_remote_address
 
 # Import new secure settings
 from backend.core.settings import Settings
+from backend.core.security import add_security_headers, verify_api_key
 
 # Import API routes
 from backend.api.routes import router
@@ -58,6 +59,9 @@ def create_app() -> FastAPI:
         description="Secure enterprise-grade RAG system with agentic processing"
     )
     
+    # Security headers middleware
+    app.middleware("http")(add_security_headers)
+    
     # CORS middleware - restricted to specific origins
     origins = [
         "https://agentic-rag-gamma.vercel.app",  # Production frontend
@@ -69,7 +73,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=origins,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-API-Key"],
         allow_credentials=True,
         max_age=600,
     )

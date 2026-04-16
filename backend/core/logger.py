@@ -3,6 +3,23 @@ Safe logging module - prevents secret leakage in logs
 """
 import logging
 import re
+import os
+
+# Setup file logging for error monitoring
+def setup_file_logging():
+    """Setup file handler for error logging"""
+    log_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    file_handler = logging.FileHandler(os.path.join(log_dir, 'app.log'))
+    file_handler.setLevel(logging.WARNING)  # Only log warnings and errors
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    
+    # Get root logger and add file handler
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
 
 
 def mask_api_key(key: str) -> str:
