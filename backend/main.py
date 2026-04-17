@@ -126,6 +126,12 @@ def create_app() -> FastAPI:
     # Include API routes
     app.include_router(router, prefix="/api/v1")
     
+    # Root-level health endpoint for Railway healthcheck (not behind /api/v1 prefix)
+    @app.get("/health")
+    async def root_health_check():
+        """Root health check for Railway monitoring"""
+        return {"status": "healthy", "version": "1.0.0"}
+    
     # Static files - serve frontend from project root
     project_root = os.path.dirname(backend_dir)
     frontend_path = os.path.join(project_root, "frontend")
