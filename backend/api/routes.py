@@ -759,7 +759,7 @@ async def clear_runtime_config_endpoint():
 
 @router.post("/list-models")
 async def list_available_models(request: Dict[str, Any]):
-    """List available models for a provider by querying their API"""
+    # List available models for a provider by querying their API
     try:
         provider = request.get("provider", "").lower()
         api_key = request.get("api_key", "")
