@@ -1078,6 +1078,7 @@ async def test_api_connection(test_data: Dict[str, Any]):
 
 @router.get("/config-status")
 async def get_config_status():
+    """Get current provider status with health indication for UI badges."""
     try:
         from backend.config import get_runtime_config
 
