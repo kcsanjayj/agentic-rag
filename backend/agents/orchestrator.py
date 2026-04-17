@@ -166,9 +166,9 @@ class ReasoningEngine:
     def __init__(self):
         self.llm = None  # Will be created fresh for each query
     
-    async def generate(self, context: str, task: str, memory_context: str = "") -> str:
+    async def generate(self, context: str, task: str, memory_context: str = "", user_api_key: str = None) -> str:
         """Generate response with structured prompt"""
-        
+
         # Create fresh LLMClient for each query to pick up new config
         self.llm = LLMClient()
         
@@ -210,7 +210,7 @@ Be specific, detailed, and grounded."""
 
         try:
             response = await self.llm.generate_response(
-                prompt, temperature=0.3, max_tokens=1500
+                prompt, temperature=0.3, max_tokens=1500, user_api_key=user_api_key
             )
             return response
         except Exception as e:
@@ -408,7 +408,8 @@ class Orchestrator:
             result = await self._run_agentic_loop(
                 query=request.query,
                 doc_id=active_document_id,
-                doc_text=doc_text
+                doc_text=doc_text,
+                user_api_key=user_api_key
             )
             
             # 💾 Cache the result
@@ -485,11 +486,12 @@ class Orchestrator:
         self,
         query: str,
         doc_id: str,
-        doc_text: str
+        doc_text: str,
+        user_api_key: str = None
     ) -> Dict[str, Any]:
         """
         Run the 6-component agentic loop.
-        
+
         Returns dict with: answer, task, retrieved_docs, retries, confidence, latencies, retry_reason
         """
         start_time = time.time()
@@ -515,7 +517,7 @@ class Orchestrator:
         
         # 3. 🔥 GENERATE - Initial answer
         gen_start = time.time()
-        answer = await self.reasoning.generate(full_context, task, memory_ctx)
+        answer = await self.reasoning.generate(full_context, task, memory_ctx, user_api_key)
         latencies['generation'] = time.time() - gen_start
         logger.info(f"📝 GENERATED: {len(answer)} chars ({latencies['generation']:.3f}s)")
         
@@ -533,7 +535,7 @@ class Orchestrator:
                 context = "\n\n".join([d.get('content', '') for d in broader_docs[:8]])
                 full_context = context + memory_ctx
                 regen_start = time.time()
-                answer = await self.reasoning.generate(full_context, task, memory_ctx)
+                answer = await self.reasoning.generate(full_context, task, memory_ctx, user_api_key)
                 latencies['regeneration'] = time.time() - regen_start
                 logger.info(f"📝 REGENERATED: {len(answer)} chars ({latencies['regeneration']:.3f}s)")
             else:
@@ -570,7 +572,7 @@ class Orchestrator:
                 
                 # Regenerate
                 regen_start = time.time()
-                answer = await self.reasoning.generate(full_context, task, memory_ctx)
+                answer = await self.reasoning.generate(full_context, task, memory_ctx, user_api_key)
                 latencies['regeneration_2'] = time.time() - regen_start
         
         latencies['critic'] = time.time() - critic_start
