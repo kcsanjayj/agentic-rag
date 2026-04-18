@@ -2,6 +2,7 @@
 Vector store for document embeddings using ChromaDB
 """
 
+import os
 import uuid
 from typing import List, Dict, Any, Optional
 import chromadb
@@ -10,6 +11,9 @@ from backend.utils.logger import setup_logger
 from backend.config import settings
 
 logger = setup_logger(__name__)
+
+# Ensure ChromaDB directory exists
+os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
 
 
 class VectorStore:

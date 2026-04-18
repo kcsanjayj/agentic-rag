@@ -37,6 +37,10 @@ import json
 logger = setup_logger(__name__)
 router = APIRouter(tags=["api"])
 
+# Ensure data directories exist
+os.makedirs("data/uploads", exist_ok=True)
+os.makedirs("data/vectors", exist_ok=True)
+
 # SECURITY: Check if debug endpoints should be enabled
 def is_debug_enabled():
     """Debug endpoints only enabled in non-production environments"""
@@ -552,13 +556,16 @@ async def upload_document(
         )
         
     except Exception as e:
-        logger.error(f"Error uploading document: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error uploading document: {error_msg}")
         # Clean up file if upload failed
         if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
         
-        # SECURITY: Don't expose internal error details
-        raise HTTPException(status_code=500, detail=SAFE_ERROR_MESSAGE)
+        # DEBUG: Show actual error for local development
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Upload failed: {error_msg}")
 
 
 @router.get("/documents", response_model=List[DocumentInfo])

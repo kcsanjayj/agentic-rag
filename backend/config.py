@@ -159,8 +159,8 @@ class Settings(BaseSettings):
     HUGGINGFACE_TEMPERATURE: float = 0.1
     HUGGINGFACE_MAX_TOKENS: int = 4096
     
-    # Embeddings settings - Use fast model for quick loading
-    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"  # Fast, 384d
+    # Embeddings settings - PRO: OpenAI text-embedding-3-small (1536d, cloud-based)
+    EMBEDDING_MODEL: str = "text-embedding-3-small"  # OpenAI 1536d
     EMBEDDING_DEVICE: str = "cpu"
     EMBEDDING_NORMALIZE: bool = True
     EMBEDDING_PREFIX_QUERY: str = ""  # MiniLM doesn't need prefixes

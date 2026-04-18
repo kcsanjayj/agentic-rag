@@ -169,14 +169,21 @@ class DocumentLoader:
         """Load PDF file content"""
         try:
             import PyPDF2
+            import asyncio
             
-            content_parts = []
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    content_parts.append(page.extract_text())
+            def read_pdf():
+                content_parts = []
+                with open(file_path, 'rb') as file:
+                    pdf_reader = PyPDF2.PdfReader(file)
+                    for page in pdf_reader.pages:
+                        text = page.extract_text()
+                        if text:
+                            content_parts.append(text)
+                return "\n".join(content_parts)
             
-            return "\n".join(content_parts)
+            # Run blocking I/O in thread pool
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, read_pdf)
             
         except ImportError:
             logger.error("PyPDF2 not available for PDF processing")
@@ -186,15 +193,19 @@ class DocumentLoader:
         """Load DOCX file content"""
         try:
             import docx
+            import asyncio
             
-            doc = docx.Document(file_path)
-            content_parts = []
+            def read_docx():
+                document = docx.Document(file_path)
+                content_parts = []
+                for paragraph in document.paragraphs:
+                    if paragraph.text.strip():
+                        content_parts.append(paragraph.text)
+                return "\n".join(content_parts)
             
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    content_parts.append(paragraph.text)
-            
-            return "\n".join(content_parts)
+            # Run blocking I/O in thread pool
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, read_docx)
             
         except ImportError:
             logger.error("python-docx not available for DOCX processing")
