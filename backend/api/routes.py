@@ -3,6 +3,7 @@ API routes for Agentic-RAG
 """
 
 import os
+import re
 import time
 import uuid
 import asyncio
