@@ -5,7 +5,7 @@ class AGENTIC_RAG {
         this.isProcessing = false;
         this.typingTimeout = null;
         this.apiBaseUrl = window.location.hostname === 'localhost'
-            ? 'http://localhost:8000/api/v1'  // Local testing
+            ? 'http://localhost:8080/api/v1'  // Local testing (matches server port)
             : 'https://agentic-rag-production.up.railway.app/api/v1';  // Production
         this.hasDocument = false; // Track if user has uploaded a document
         this.userApiKey = ''; // User's AI provider API key
