@@ -558,9 +558,13 @@ async def upload_document(
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error uploading document: {error_msg}")
-        # Clean up file if upload failed
-        if 'file_path' in locals() and os.path.exists(file_path):
-            os.remove(file_path)
+        # Clean up file if upload failed (only if file_path was set and exists)
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logger.info(f"Cleaned up failed upload file: {file_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up file {file_path}: {cleanup_error}")
         
         # DEBUG: Show actual error for local development
         import traceback
