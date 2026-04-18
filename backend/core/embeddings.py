@@ -141,8 +141,9 @@ class EmbeddingGenerator:
         Args:
             api_key: OpenAI API key (required, user-provided for SaaS billing model)
         """
-        if not api_key or not api_key.startswith("sk-"):
-            raise ValueError("Valid OpenAI API key required (must start with 'sk-')")
+        # Note: Embeddings use OpenAI regardless of chat provider
+        if not api_key or len(api_key) < 10:
+            raise ValueError("Valid API key required for embeddings (OpenAI key recommended)")
         
         self._api_key = api_key
         self.client = OpenAI(api_key=api_key)

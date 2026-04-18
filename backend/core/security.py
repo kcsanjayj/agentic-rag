@@ -154,12 +154,11 @@ def get_user_api_key(x_user_api_key: str = Header(..., description="User's OpenA
     Reusable: Use in any endpoint that needs user API key
     """
     if not x_user_api_key:
-        raise HTTPException(status_code=400, detail="API key required. Provide your OpenAI API key in X-User-Api-Key header")
+        raise HTTPException(status_code=400, detail="API key required. Provide your API key in X-User-Api-Key header")
     
-    if not x_user_api_key.startswith("sk-"):
-        raise HTTPException(status_code=400, detail="Invalid API key format. Must start with 'sk-'")
-    
-    if len(x_user_api_key) < 20:
+    # Basic length check - different providers have different key formats
+    # OpenAI: sk-..., NVIDIA: nvapi-... or long hex, etc.
+    if len(x_user_api_key) < 10:
         raise HTTPException(status_code=400, detail="Invalid API key. Key too short.")
     
     return x_user_api_key

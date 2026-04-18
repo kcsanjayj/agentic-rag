@@ -8,8 +8,9 @@ class AGENTIC_RAG {
             ? 'http://localhost:8080/api/v1'  // Local testing (matches server port)
             : 'https://agentic-rag-production.up.railway.app/api/v1';  // Production
         this.hasDocument = false; // Track if user has uploaded a document
-        // Load API key from sessionStorage (survives refresh, clears when tab closes)
+        // Load API keys from sessionStorage (survives refresh, clears when tab closes)
         this.userApiKey = sessionStorage.getItem('userApiKey') || '';
+        this.embeddingApiKey = sessionStorage.getItem('embeddingApiKey') || '';
         // Internal backend API key - must match Railway API_SECRET environment variable
         this.internalApiKey = window.API_SECRET || 'test-secret-12345678901234567890';
         this.initializeApp();
@@ -441,11 +442,11 @@ class AGENTIC_RAG {
             const formData = new FormData();
             formData.append('file', file);
 
-            // Get API key from memory or sessionStorage
-            const apiKey = this.userApiKey || sessionStorage.getItem('userApiKey') || '';
+            // Get embedding API key (OpenAI) for upload - required for embeddings
+            const apiKey = this.embeddingApiKey || sessionStorage.getItem('embeddingApiKey') || '';
             
             if (!apiKey) {
-                this.updateMessageStatus(processingMessageId, 'error', 'Please configure AI provider API key first');
+                this.updateMessageStatus(processingMessageId, 'error', 'Please configure OpenAI Embedding API key in AI Config first');
                 this.isProcessing = false;
                 return;
             }
@@ -454,7 +455,7 @@ class AGENTIC_RAG {
                 method: 'POST',
                 headers: {
                     'X-API-Key': this.internalApiKey, // Internal backend auth
-                    'X-User-Api-Key': apiKey // User's AI key for embeddings
+                    'X-User-Api-Key': apiKey // OpenAI key for embeddings
                 },
                 body: formData
             });
@@ -676,12 +677,20 @@ class AGENTIC_RAG {
             
             // Show masked API key if configured
             const apiKeyInput = document.getElementById('apiKeyInput');
+            const embeddingKeyInput = document.getElementById('embeddingKeyInput');
             if (config.has_api_key) {
                 apiKeyInput.value = config.api_key || '••••••••';
                 apiKeyInput.placeholder = 'API key configured (••••••••)';
             } else {
                 apiKeyInput.value = '';
                 apiKeyInput.placeholder = 'Enter your API key';
+            }
+            // Set embedding key from sessionStorage if available
+            if (embeddingKeyInput) {
+                const savedEmbeddingKey = sessionStorage.getItem('embeddingApiKey');
+                if (savedEmbeddingKey) {
+                    embeddingKeyInput.value = savedEmbeddingKey;
+                }
             }
             
         } catch (error) {
@@ -831,11 +840,18 @@ class AGENTIC_RAG {
             });
             
             if (response.ok) {
-                // Store API key in sessionStorage (survives refresh, clears when tab closes)
-                if (apiKey && apiKey !== 'null' && apiKey !== 'undefined') {
-                    this.userApiKey = apiKey;
-                    sessionStorage.setItem('userApiKey', apiKey);
-                }
+                // Get embedding key
+            const embeddingKey = document.getElementById('embeddingKeyInput').value;
+            
+            // Store both keys in sessionStorage
+            if (apiKey && apiKey !== 'null' && apiKey !== 'undefined') {
+                this.userApiKey = apiKey;
+                sessionStorage.setItem('userApiKey', apiKey);
+            }
+            if (embeddingKey) {
+                this.embeddingApiKey = embeddingKey;
+                sessionStorage.setItem('embeddingApiKey', embeddingKey);
+            }
                 
                 // Close modal immediately - don't wait for API test
                 this.hideConfigModal();
