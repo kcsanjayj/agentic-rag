@@ -10,7 +10,7 @@ class AGENTIC_RAG {
         this.hasDocument = false; // Track if user has uploaded a document
         this.userApiKey = ''; // User's AI provider API key
         // Internal backend API key - must match Railway API_SECRET environment variable
-        this.internalApiKey = window.API_SECRET || 'your-internal-api-secret';
+        this.internalApiKey = window.API_SECRET || 'test-secret-12345678901234567890';
         this.initializeApp();
     }
 
