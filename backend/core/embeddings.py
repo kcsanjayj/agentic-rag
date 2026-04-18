@@ -1,128 +1,178 @@
 """
-Embedding generation using Gemini API (lightweight, no heavy ML models)
+PRO RAG Stack: OpenAI Embeddings (lightweight, no heavy ML models)
 """
 
 import asyncio
-from typing import List
+from typing import List, Optional
 import numpy as np
-from google import genai
+from openai import OpenAI
 from backend.utils.logger import setup_logger
-from backend.config import settings
 
 logger = setup_logger(__name__)
 
-# Configure Gemini API
-def configure_gemini():
-    """Configure Gemini with available API key"""
-    api_keys = settings.get_api_keys("gemini")
-    if api_keys:
-        try:
-            genai.configure(api_key=api_keys[0])
-            return True
-        except Exception as e:
-            logger.error(f"Failed to configure Gemini: {e}")
-            return False
-    return False
+# Simple cache for embeddings (PRO optimization)
+_cache = {}
 
-# Initialize on module load (lazy - will retry if key not available yet)
-_gemini_configured = False
-_gemini_client = None
 
-def ensure_gemini_configured():
-    global _gemini_configured, _gemini_client
-    if not _gemini_configured:
-        api_keys = settings.get_api_keys("gemini")
-        if api_keys:
-            try:
-                _gemini_client = genai.Client(api_key=api_keys[0])
-                _gemini_configured = True
-            except Exception as e:
-                logger.error(f"Failed to initialize Gemini client: {e}")
-    return _gemini_configured
+def get_openai_client(api_key: str) -> OpenAI:
+    """Create OpenAI client with user-provided API key"""
+    return OpenAI(api_key=api_key)
 
-def get_gemini_client():
-    """Get the configured Gemini client"""
-    if ensure_gemini_configured():
-        return _gemini_client
-    return None
+
+def _mock_embedding(text: str) -> List[float]:
+    """Generate deterministic mock embedding for testing without API key"""
+    import hashlib
+    hash_val = hashlib.md5(text.encode()).hexdigest()
+    embedding = []
+    for i in range(0, len(hash_val), 2):
+        val = int(hash_val[i:i+2], 16) / 255.0
+        embedding.append(val)
+    # Pad to 1536 dimensions (OpenAI text-embedding-3-small)
+    while len(embedding) < 1536:
+        embedding.extend(embedding[:min(1536-len(embedding), len(embedding))])
+    return embedding[:1536]
+
+
+def embed_text(text: str, api_key: str, use_cache: bool = True) -> List[float]:
+    """
+    Generate embedding for a single text using OpenAI API
+    
+    Args:
+        text: Text to embed
+        api_key: User-provided OpenAI API key
+        use_cache: Whether to use caching (default: True)
+    
+    Returns:
+        1536-dimensional embedding vector
+    """
+    # Check cache first (PRO optimization)
+    if use_cache and text in _cache:
+        return _cache[text]
+
+    client = get_openai_client(api_key)
+
+    try:
+        response = client.embeddings.create(
+            model="text-embedding-3-small",  # fast + cheap
+            input=text
+        )
+        embedding = response.data[0].embedding
+
+        # Cache the result (PRO optimization)
+        if use_cache:
+            _cache[text] = embedding
+
+        return embedding
+    except Exception as e:
+        logger.error(f"Error generating embedding: {str(e)}, falling back to mock")
+        return _mock_embedding(text)
+
+
+def embed_texts(texts: List[str], api_key: str, use_cache: bool = True) -> List[List[float]]:
+    """
+    Generate embeddings for multiple texts using OpenAI API (batch - faster)
+
+    Args:
+        texts: List of texts to embed
+        api_key: User-provided OpenAI API key
+        use_cache: Whether to use caching (default: True)
+
+    Returns:
+        List of 1536-dimensional embedding vectors
+    """
+    # Check cache for each text
+    cached_results = {}
+    texts_to_embed = []
+
+    if use_cache:
+        for text in texts:
+            if text in _cache:
+                cached_results[text] = _cache[text]
+            else:
+                texts_to_embed.append(text)
+    else:
+        texts_to_embed = texts
+
+    # All texts were cached
+    if not texts_to_embed:
+        return [cached_results[text] for text in texts]
+
+    client = get_openai_client(api_key)
+
+    try:
+        response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=texts_to_embed
+        )
+
+        # Map results back
+        results = {}
+        for i, item in enumerate(response.data):
+            text = texts_to_embed[i]
+            embedding = item.embedding
+            results[text] = embedding
+
+            # Cache the result
+            if use_cache:
+                _cache[text] = embedding
+
+        # Combine cached + new results in original order
+        return [cached_results.get(text, results.get(text, _mock_embedding(text))) for text in texts]
+
+    except Exception as e:
+        logger.error(f"Error generating batch embeddings: {str(e)}, falling back to mock")
+        return [_mock_embedding(text) for text in texts]
+
+
+def clear_cache():
+    """Clear the embedding cache"""
+    global _cache
+    _cache = {}
+    logger.info("Embedding cache cleared")
 
 
 class EmbeddingGenerator:
-    """Generates embeddings using Gemini API (lightweight, cloud-based)"""
-    
-    def __init__(self):
-        self.model_name = "text-embedding-004"
-        self._use_mock = not ensure_gemini_configured()
-        if self._use_mock:
-            logger.warning("No Gemini API key found - using mock embeddings for testing")
-        else:
-            logger.info(f"Embedding generator ready (Gemini API-based)")
-    
-    def _mock_embedding(self, text: str) -> List[float]:
-        """Generate deterministic mock embedding for testing without API key"""
-        # Create a deterministic 768-dim embedding based on text hash
-        import hashlib
-        hash_val = hashlib.md5(text.encode()).hexdigest()
-        # Generate 768 dimensions from hash chunks
-        embedding = []
-        for i in range(0, len(hash_val), 2):
-            val = int(hash_val[i:i+2], 16) / 255.0  # Normalize to 0-1
-            embedding.append(val)
-        # Pad to 768 dimensions
-        while len(embedding) < 768:
-            embedding.extend(embedding[:min(768-len(embedding), len(embedding))])
-        return embedding[:768]
-    
+    """PRO RAG: OpenAI Embeddings (lightweight, cloud-based, batch-optimized)"""
+
+    def __init__(self, api_key: Optional[str] = None):
+        self._api_key = api_key
+        self.model_name = "text-embedding-3-small"
+        logger.info(f"PRO Embedding generator ready (OpenAI API-based)")
+
+    def set_api_key(self, api_key: str):
+        """Update API key dynamically (user-provided)"""
+        self._api_key = api_key
+
     async def generate_embedding(self, text: str, is_query: bool = False) -> List[float]:
-        """Generate embedding for a single text using Gemini API or mock"""
-        try:
-            if self._use_mock:
-                return self._mock_embedding(text)
-            
-            client = get_gemini_client()
-            if not client:
-                logger.warning("Gemini client not available, falling back to mock")
-                return self._mock_embedding(text)
-            
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: client.models.embed_content(
-                    model=self.model_name,
-                    contents=[text]
-                )
-            )
-            embedding = result.embeddings[0].values
-            return list(embedding)
-        except Exception as e:
-            logger.error(f"Error generating embedding: {str(e)}, falling back to mock")
-            return self._mock_embedding(text)
-    
+        """Generate embedding for a single text (async wrapper)"""
+        if not self._api_key:
+            logger.warning("No API key provided - using mock embeddings")
+            return _mock_embedding(text)
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, embed_text, text, self._api_key)
+
     async def generate_query_embedding(self, query: str) -> List[float]:
         """Generate embedding specifically for queries"""
         return await self.generate_embedding(query, is_query=True)
-    
+
     async def generate_document_embedding(self, text: str) -> List[float]:
         """Generate embedding specifically for documents"""
         return await self.generate_embedding(text, is_query=False)
-    
+
     async def generate_embeddings(self, texts: List[str], is_query: bool = False) -> List[List[float]]:
-        """Generate embeddings for multiple texts"""
-        try:
-            embeddings = []
-            for text in texts:
-                embedding = await self.generate_embedding(text, is_query=is_query)
-                embeddings.append(embedding)
-            return embeddings
-        except Exception as e:
-            logger.error(f"Error generating embeddings: {str(e)}")
-            # Return mock embeddings for all
-            return [self._mock_embedding(text) for text in texts]
-    
+        """Generate embeddings for multiple texts (PRO: uses batching)"""
+        if not self._api_key:
+            logger.warning("No API key provided - using mock embeddings")
+            return [_mock_embedding(text) for text in texts]
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, embed_texts, texts, self._api_key)
+
     def get_embedding_dimension(self) -> int:
-        """Get the dimension of embeddings (Gemini embedding-001 is 768d)"""
-        return 768
-    
+        """Get the dimension of embeddings (OpenAI text-embedding-3-small is 1536d)"""
+        return 1536
+
     async def similarity(self, text1: str, text2: str, text1_is_query: bool = False) -> float:
         """Calculate cosine similarity between two texts"""
         try:
