@@ -124,8 +124,9 @@ active_document_id = None
 active_document_name = None
 
 def get_embedding_generator(api_key: str):
-    """Create embedding generator with user-provided API key (PRO: no global singleton)"""
-    return EmbeddingGenerator(api_key)
+    """Create universal embedding generator - works with ANY provider"""
+    from backend.core.embeddings_universal import UniversalEmbeddingGenerator
+    return UniversalEmbeddingGenerator(api_key)
 
 # 🔥 DELETED: Duplicate get_vector_store() - now imported from backend.core.vector_store
 
