@@ -10,3 +10,9 @@ pydantic==2.7.1
 python-dotenv==1.0.1
 numpy==1.26.4
 tiktoken==0.7.0
+
+# Additional required packages
+langchain-text-splitters==0.0.1
+slowapi==0.1.9
+aiohttp==3.9.3
+google-genai==0.3.0
