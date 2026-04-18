@@ -440,7 +440,8 @@ class AGENTIC_RAG {
             const response = await fetch(`${this.apiBaseUrl}/upload`, {
                 method: 'POST',
                 headers: {
-                    'X-API-Key': this.internalApiKey // Internal backend auth
+                    'X-API-Key': this.internalApiKey, // Internal backend auth
+                    'X-User-Api-Key': this.userApiKey || 'sk-dummy-key-for-upload' // User's AI key for embeddings
                 },
                 body: formData
             });
