@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  agentic-rag:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=production
+      - API_SECRET=${API_SECRET:-dev-secret-key}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
