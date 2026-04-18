@@ -8,7 +8,8 @@ class AGENTIC_RAG {
             ? 'http://localhost:8080/api/v1'  // Local testing (matches server port)
             : 'https://agentic-rag-production.up.railway.app/api/v1';  // Production
         this.hasDocument = false; // Track if user has uploaded a document
-        this.userApiKey = ''; // User's AI provider API key
+        // Load API key from sessionStorage (survives refresh, clears when tab closes)
+        this.userApiKey = sessionStorage.getItem('userApiKey') || '';
         // Internal backend API key - must match Railway API_SECRET environment variable
         this.internalApiKey = window.API_SECRET || 'test-secret-12345678901234567890';
         this.initializeApp();
@@ -170,23 +171,8 @@ class AGENTIC_RAG {
 
     async sendQueryToBackend(query) {
         try {
-            // Check if user API key is set in frontend
-            let apiKey = this.userApiKey;
-            
-            // If not set, check if backend has a configured key
-            if (!apiKey) {
-                try {
-                    const configResp = await fetch(`${this.apiBaseUrl}/config`, {
-                        headers: { 'X-API-Key': this.internalApiKey }
-                    });
-                    const config = await configResp.json();
-                    if (config.has_api_key) {
-                        apiKey = 'existing';  // Signal backend to use its stored key
-                    }
-                } catch (e) {
-                    console.log('Could not check backend config for key');
-                }
-            }
+            // Check if user API key is set (from memory or sessionStorage)
+            let apiKey = this.userApiKey || sessionStorage.getItem('userApiKey') || '';
             
             // If still no key, show warning
             if (!apiKey) {
@@ -836,9 +822,10 @@ class AGENTIC_RAG {
             });
             
             if (response.ok) {
-                // Store API key in frontend for subsequent queries (if not masked)
+                // Store API key in sessionStorage (survives refresh, clears when tab closes)
                 if (apiKey && apiKey !== 'null' && apiKey !== 'undefined') {
                     this.userApiKey = apiKey;
+                    sessionStorage.setItem('userApiKey', apiKey);
                 }
                 
                 // Close modal immediately - don't wait for API test
