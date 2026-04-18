@@ -8,7 +8,7 @@ import uuid
 import asyncio
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from backend.models.schemas import (
@@ -20,6 +20,9 @@ from backend.core.security import (
     verify_api_key, MAX_FILE_SIZE, get_user_api_key, CostLimits
 )
 from backend.agents.orchestrator import Orchestrator
+from backend.agents.streaming import stream_agentic_response, create_sse_headers
+from backend.agents.tool_caller import ToolCaller
+from backend.agents.memory import get_memory
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from backend.tools.document_loader import DocumentLoader
 from backend.tools.text_splitter import TextSplitter
@@ -194,6 +197,179 @@ async def query_documents(
         logger.error(f"Error processing query: {str(e)}")
         # SECURITY: Don't expose internal error details
         raise HTTPException(status_code=500, detail=SAFE_ERROR_MESSAGE)
+
+
+# =============================================================================
+# PRO: STREAMING RESPONSE (ChatGPT-like real-time)
+# =============================================================================
+
+@router.post("/query-stream")
+@limiter.limit("10/minute")
+async def query_stream(
+    request: Request,
+    query_request: QueryRequest,
+    api_key: str = Depends(get_user_api_key),
+    x_session_id: str = Header(None, description="Session ID for conversation memory")
+):
+    """
+    PRO: Streaming query endpoint with Server-Sent Events.
+    Returns tokens in real-time like ChatGPT.
+    """
+    try:
+        # Get memory if session provided
+        memory = None
+        if x_session_id:
+            memory = get_memory(x_session_id)
+        
+        # Get active document
+        active_doc = get_active_document()
+        if not active_doc["id"]:
+            # Return error as SSE
+            error_event = json.dumps({"type": "error", "message": "No document uploaded"})
+            return StreamingResponse(
+                iter([f"data: {error_event}\n\n"]),
+                headers=create_sse_headers()
+            )
+        
+        # Retrieve context
+        vector_store = get_vector_store()
+        embedding_gen = EmbeddingGenerator(api_key)
+        query_embedding = await embedding_gen.generate_query_embedding(query_request.query)
+        docs = await vector_store.similarity_search(
+            query_embedding=query_embedding,
+            top_k=4,
+            filter_dict={"document_id": active_doc["id"]}
+        )
+        context = "\n\n".join([d.get('content', '') for d in docs])
+        
+        # Get memory context
+        memory_context = ""
+        if memory:
+            memory_context = memory.get_context_for_prompt()
+        
+        # Stream response
+        return StreamingResponse(
+            stream_agentic_response(
+                api_key=api_key,
+                query=query_request.query,
+                context=context,
+                memory_context=memory_context
+            ),
+            headers=create_sse_headers()
+        )
+        
+    except Exception as e:
+        logger.error(f"Streaming error: {e}")
+        error_event = json.dumps({"type": "error", "message": str(e)})
+        return StreamingResponse(
+            iter([f"data: {error_event}\n\n"]),
+            headers=create_sse_headers()
+        )
+
+
+# =============================================================================
+# PRO: AGENTIC WITH TOOL CALLING (OpenAI Function Calling)
+# =============================================================================
+
+@router.post("/query-pro", response_model=QueryResponse, dependencies=[Depends(verify_api_key)])
+@limiter.limit("10/minute")
+async def query_pro(
+    request: Request,
+    query_request: QueryRequest,
+    api_key: str = Depends(get_user_api_key),
+    x_session_id: str = Header(None, description="Session ID for conversation memory"),
+    serpapi_key: str = Header(None, description="Optional SerpAPI key for web search")
+):
+    """
+    PRO: Agentic query with structured tool calling.
+    Uses OpenAI Function Calling API (no JSON parsing).
+    """
+    import time
+    start_time = time.time()
+    conversation_id = query_request.conversation_id or str(uuid.uuid4())
+    
+    try:
+        # Get memory
+        memory = None
+        if x_session_id:
+            memory = get_memory(x_session_id)
+        
+        # Get active document
+        active_doc = get_active_document()
+        if not active_doc["id"]:
+            return QueryResponse(
+                query=query_request.query,
+                answer="Please upload a document first.",
+                sources=[],
+                agent_steps=[{"error": "no_document"}],
+                processing_time=time.time() - start_time,
+                confidence_score=0.0,
+                conversation_id=conversation_id
+            )
+        
+        # Retrieve context
+        vector_store = get_vector_store()
+        embedding_gen = EmbeddingGenerator(api_key)
+        query_embedding = await embedding_gen.generate_query_embedding(query_request.query)
+        docs = await vector_store.similarity_search(
+            query_embedding=query_embedding,
+            top_k=4,
+            filter_dict={"document_id": active_doc["id"]}
+        )
+        context = "\n\n".join([d.get('content', '') for d in docs])
+        
+        # Build messages
+        messages = []
+        if memory:
+            memory_ctx = memory.get_context_for_prompt()
+            if memory_ctx:
+                messages.append({"role": "system", "content": memory_ctx})
+        
+        messages.append({
+            "role": "user",
+            "content": f"Context:\n{context}\n\nQuestion: {query_request.query}"
+        })
+        
+        # PRO: Use ToolCaller with OpenAI function calling
+        tool_caller = ToolCaller(api_key, serpapi_key)
+        result = tool_caller.run_with_tools(messages, max_steps=3)
+        
+        # Store in memory
+        if memory:
+            memory.add(query_request.query, result["content"])
+        
+        # Build agent steps
+        agent_steps = []
+        for tc in result["tool_calls"]:
+            agent_steps.append({
+                "tool": tc["tool"],
+                "arguments": tc["arguments"],
+                "result": tc["result"][:100]
+            })
+        
+        processing_time = time.time() - start_time
+        
+        return QueryResponse(
+            query=query_request.query,
+            answer=result["content"],
+            sources=[],
+            agent_steps=agent_steps,
+            processing_time=processing_time,
+            confidence_score=0.85 if result["tool_calls"] else 0.7,
+            conversation_id=conversation_id
+        )
+        
+    except Exception as e:
+        logger.error(f"PRO query error: {e}")
+        return QueryResponse(
+            query=query_request.query,
+            answer=f"Error: {str(e)}",
+            sources=[],
+            agent_steps=[{"error": str(e)}],
+            processing_time=time.time() - start_time,
+            confidence_score=0.0,
+            conversation_id=conversation_id
+        )
 
 
 @router.post("/upload", response_model=DocumentUploadResponse, dependencies=[Depends(verify_api_key)])
