@@ -1,13 +1,12 @@
-﻿fastapi
-uvicorn[standard]
+﻿fastapi==0.110.0
+uvicorn[standard]==0.29.0
 
-langchain==0.0.350
+openai==1.30.1
 
-openai
+chromadb==0.5.0
+sentence-transformers==2.7.0
 
-chromadb
-sentence-transformers
-
-pydantic
-python-dotenv
-tiktoken
+pydantic==2.7.1
+python-dotenv==1.0.1
+numpy==1.26.4
+tiktoken==0.7.0
