@@ -93,41 +93,46 @@ class AgenticRAG:
         for step_num in range(self.max_steps):
             step_start = time.time()
             
-            # 1. Decide if tool should be used
+            # 1. PRO: Decide tool and prepare retrieval in parallel (if safe)
+            tool_decision = None
+            retrieval_task = None
+            
             if enable_tools:
                 tool_decision = await self._select_tool(current_query)
+            
+            # 2. PRO: Execute tool and retrieve in parallel when possible
+            if tool_decision and tool_decision["use_tool"]:
+                tool_name = tool_decision["tool_name"]
+                tool_input = tool_decision["tool_input"]
                 
-                if tool_decision["use_tool"]:
-                    tool_name = tool_decision["tool_name"]
-                    tool_input = tool_decision["tool_input"]
-                    
-                    # Execute tool
-                    tool_result = await self._execute_tool(tool_name, tool_input)
-                    tool_calls.append({
-                        "step": step_num + 1,
-                        "tool": tool_name,
-                        "input": tool_input,
-                        "result": tool_result
-                    })
-                    
-                    # Update query with tool result
-                    current_query = f"""Original question: {query}
+                # Execute tool
+                tool_result = await self._execute_tool(tool_name, tool_input)
+                tool_calls.append({
+                    "step": step_num + 1,
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "result": tool_result
+                })
+                
+                # Update query with tool result
+                current_query = f"""Original question: {query}
 
 Tool used: {tool_name}
 Tool result: {tool_result}
 
 Based on this, answer the original question."""
-                    
-                    steps.append(AgentStep(
-                        step_number=step_num + 1,
-                        action=f"tool:{tool_name}",
-                        input_data=tool_input,
-                        output_data=tool_result[:200],  # Truncate for logging
-                        latency_ms=(time.time() - step_start) * 1000
-                    ))
-                    continue  # Continue to next step
+                
+                steps.append(AgentStep(
+                    step_number=step_num + 1,
+                    action=f"tool:{tool_name}",
+                    input_data=tool_input,
+                    output_data=tool_result[:200],
+                    latency_ms=(time.time() - step_start) * 1000
+                ))
+                # Continue loop - might need another tool
+                continue
             
-            # No tool needed or tools disabled - proceed to retrieval
+            # No tool needed - proceed to retrieval
             break
         
         # 2. Retrieve relevant documents

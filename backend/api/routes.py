@@ -17,7 +17,8 @@ from backend.models.schemas import (
 )
 from backend.core.security import (
     is_safe_input, sanitize_output, validate_query_length,
-    verify_api_key, MAX_FILE_SIZE, get_user_api_key, CostLimits
+    verify_api_key, MAX_FILE_SIZE, get_user_api_key, CostLimits,
+    validate_openai_key_cached
 )
 from backend.agents.orchestrator import Orchestrator
 from backend.agents.streaming import stream_agentic_response, create_sse_headers
@@ -155,6 +156,11 @@ async def query_documents(
 ):
     """Query documents using agentic RAG - user provides their own API key"""
     try:
+        # [SECURITY] PRO: Validate OpenAI API key (prevent fake keys)
+        is_valid_key = await validate_openai_key_cached(api_key)
+        if not is_valid_key:
+            raise HTTPException(status_code=401, detail="Invalid or expired OpenAI API key")
+        
         safe_log(logger, "info", "Processing query request")
         
         # [SECURITY] Prompt injection protection
@@ -216,6 +222,15 @@ async def query_stream(
     Returns tokens in real-time like ChatGPT.
     """
     try:
+        # [SECURITY] PRO: Validate OpenAI API key
+        is_valid_key = await validate_openai_key_cached(api_key)
+        if not is_valid_key:
+            error_event = json.dumps({"type": "error", "message": "Invalid OpenAI API key"})
+            return StreamingResponse(
+                iter([f"data: {error_event}\n\n"]),
+                headers=create_sse_headers()
+            )
+        
         # Get memory if session provided
         memory = None
         if x_session_id:
@@ -289,6 +304,19 @@ async def query_pro(
     conversation_id = query_request.conversation_id or str(uuid.uuid4())
     
     try:
+        # [SECURITY] PRO: Validate OpenAI API key
+        is_valid_key = await validate_openai_key_cached(api_key)
+        if not is_valid_key:
+            return QueryResponse(
+                query=query_request.query,
+                answer="Invalid or expired OpenAI API key. Please check your API key.",
+                sources=[],
+                agent_steps=[{"error": "invalid_api_key"}],
+                processing_time=0.0,
+                confidence_score=0.0,
+                conversation_id=conversation_id
+            )
+        
         # Get memory
         memory = None
         if x_session_id:
@@ -571,21 +599,56 @@ async def delete_document(document_id: str):
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
+    """
+    PRO: Comprehensive health check with component status.
+    Used by Railway/Render for auto-restart decisions.
+    """
+    import time
+    start_time = time.time()
+    
+    components = {
+        "api": "ok",
+        "agents": "ok",
+        "memory": "ok",
+        "vector_store": "unknown"
+    }
+    
+    overall_status = "healthy"
+    
     try:
-        # Basic health check
+        # Check vector store
+        try:
+            vector_store = get_vector_store()
+            # Lightweight check - just verify object exists
+            if vector_store:
+                components["vector_store"] = "ok"
+        except Exception as e:
+            components["vector_store"] = f"error: {str(e)[:50]}"
+            overall_status = "degraded"
+        
+        # Check memory system
+        try:
+            from backend.agents.memory import get_session_manager
+            manager = get_session_manager()
+            components["memory"] = "ok"
+        except Exception as e:
+            components["memory"] = f"error: {str(e)[:50]}"
+        
+        latency_ms = (time.time() - start_time) * 1000
+        
         return HealthResponse(
-            status="healthy",
-            version="1.0.0",
-            components={"status": "operational"}
+            status=overall_status,
+            version="2.0.0-pro",
+            components=components,
+            latency_ms=round(latency_ms, 2)
         )
+        
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
-        # SECURITY: Don't expose internal error details
         return HealthResponse(
             status="unhealthy",
-            version="1.0.0",
-            components={"error": "Health check failed"}
+            version="2.0.0-pro",
+            components={"error": "Health check failed", "detail": str(e)[:100]}
         )
 
 

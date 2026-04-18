@@ -180,3 +180,62 @@ def validate_query_length(query: str) -> tuple[bool, str]:
     if len(query) < 3:
         return False, "Query too short (min 3 characters)"
     return True, ""
+
+
+# =============================================================================
+# OPENAI API KEY VALIDATION (PRO: Prevent fake keys)
+# =============================================================================
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+# Thread pool for API validation (reusable)
+_validation_executor = ThreadPoolExecutor(max_workers=2)
+
+
+async def validate_openai_key(api_key: str) -> bool:
+    """
+    PRO: Validate OpenAI API key with a cheap API call.
+    Prevents fake keys and abuse.
+    """
+    if not api_key or not api_key.startswith("sk-"):
+        return False
+    
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        # Run validation in thread pool (non-blocking)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            _validation_executor,
+            lambda: client.models.list(limit=1)
+        )
+        return True
+        
+    except Exception as e:
+        logger.warning(f"API key validation failed: {e}")
+        return False
+
+
+# Cache for validated keys (TTL: 5 minutes)
+_validated_keys: Dict[str, float] = {}
+_validation_ttl = 300  # seconds
+
+
+async def validate_openai_key_cached(api_key: str) -> bool:
+    """Validate with caching to avoid repeated API calls"""
+    import time
+    
+    # Check cache
+    if api_key in _validated_keys:
+        if time.time() - _validated_keys[api_key] < _validation_ttl:
+            return True
+        del _validated_keys[api_key]
+    
+    # Validate fresh
+    is_valid = await validate_openai_key(api_key)
+    if is_valid:
+        _validated_keys[api_key] = time.time()
+    
+    return is_valid

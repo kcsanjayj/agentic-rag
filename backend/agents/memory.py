@@ -205,10 +205,103 @@ def get_memory(session_id: str) -> ConversationMemory:
     return get_session_manager().get_or_create(session_id)
 
 
+# =============================================================================
+# PRO: REDIS MEMORY BACKEND (Production Scaling)
+# =============================================================================
+
+class RedisMemoryBackend:
+    """
+    PRO: Redis-backed memory for production.
+    Survives restarts, supports multi-instance scaling.
+    """
+    
+    def __init__(self, redis_url: str = None):
+        self.redis_url = redis_url or os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        self.client = None
+        self._connect()
+    
+    def _connect(self):
+        """Connect to Redis"""
+        try:
+            import redis as redis_lib
+            self.client = redis_lib.from_url(self.redis_url, decode_responses=True)
+            self.client.ping()
+            logger.info(f"Redis connected: {self.redis_url}")
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}. Falling back to in-memory.")
+            self.client = None
+    
+    def _key(self, session_id: str) -> str:
+        """Generate Redis key for session"""
+        return f"agentic_rag:memory:{session_id}"
+    
+    def save(self, session_id: str, memory: ConversationMemory, ttl: int = 86400):
+        """Save memory to Redis with TTL (default: 24 hours)"""
+        if not self.client:
+            return False
+        
+        try:
+            data = json.dumps(memory.to_dict())
+            self.client.setex(self._key(session_id), ttl, data)
+            return True
+        except Exception as e:
+            logger.error(f"Redis save failed: {e}")
+            return False
+    
+    def load(self, session_id: str) -> Optional[ConversationMemory]:
+        """Load memory from Redis"""
+        if not self.client:
+            return None
+        
+        try:
+            data = self.client.get(self._key(session_id))
+            if data:
+                return ConversationMemory.from_dict(json.loads(data))
+            return None
+        except Exception as e:
+            logger.error(f"Redis load failed: {e}")
+            return None
+    
+    def delete(self, session_id: str) -> bool:
+        """Delete memory from Redis"""
+        if not self.client:
+            return False
+        
+        try:
+            return self.client.delete(self._key(session_id)) > 0
+        except Exception as e:
+            logger.error(f"Redis delete failed: {e}")
+            return False
+    
+    def is_connected(self) -> bool:
+        """Check if Redis is connected"""
+        if not self.client:
+            return False
+        try:
+            self.client.ping()
+            return True
+        except:
+            return False
+
+
+# Global Redis backend (lazy initialization)
+_redis_backend: Optional[RedisMemoryBackend] = None
+
+
+def get_redis_backend() -> Optional[RedisMemoryBackend]:
+    """Get Redis backend (if available)"""
+    global _redis_backend
+    if _redis_backend is None:
+        _redis_backend = RedisMemoryBackend()
+    return _redis_backend if _redis_backend.is_connected() else None
+
+
 __all__ = [
     "Message",
     "ConversationMemory",
     "SessionMemoryManager",
+    "RedisMemoryBackend",
     "get_session_manager",
     "get_memory",
+    "get_redis_backend",
 ]
