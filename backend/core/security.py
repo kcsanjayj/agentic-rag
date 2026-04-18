@@ -5,7 +5,7 @@ API authentication, prompt injection protection, security headers
 import os
 import re
 from fastapi import Header, HTTPException, Request
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 
 # API Secret for internal authentication - MUST be set in environment
