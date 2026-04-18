@@ -134,23 +134,49 @@ def clear_cache():
 class EmbeddingGenerator:
     """PRO RAG: OpenAI Embeddings (lightweight, cloud-based, batch-optimized)"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str):
+        """
+        Initialize with user-provided API key.
+        
+        Args:
+            api_key: OpenAI API key (required, user-provided for SaaS billing model)
+        """
+        if not api_key or not api_key.startswith("sk-"):
+            raise ValueError("Valid OpenAI API key required (must start with 'sk-')")
+        
         self._api_key = api_key
+        self.client = OpenAI(api_key=api_key)
         self.model_name = "text-embedding-3-small"
         logger.info(f"PRO Embedding generator ready (OpenAI API-based)")
 
-    def set_api_key(self, api_key: str):
-        """Update API key dynamically (user-provided)"""
-        self._api_key = api_key
+    def _generate_embedding_sync(self, text: str) -> List[float]:
+        """Synchronous embedding generation using pre-initialized client"""
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.error(f"Error generating embedding: {str(e)}, falling back to mock")
+            return _mock_embedding(text)
+
+    def _generate_embeddings_sync(self, texts: List[str]) -> List[List[float]]:
+        """Synchronous batch embedding generation using pre-initialized client"""
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=texts
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            logger.error(f"Error generating batch embeddings: {str(e)}, falling back to mock")
+            return [_mock_embedding(text) for text in texts]
 
     async def generate_embedding(self, text: str, is_query: bool = False) -> List[float]:
         """Generate embedding for a single text (async wrapper)"""
-        if not self._api_key:
-            logger.warning("No API key provided - using mock embeddings")
-            return _mock_embedding(text)
-
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, embed_text, text, self._api_key)
+        return await loop.run_in_executor(None, self._generate_embedding_sync, text)
 
     async def generate_query_embedding(self, query: str) -> List[float]:
         """Generate embedding specifically for queries"""
@@ -162,12 +188,8 @@ class EmbeddingGenerator:
 
     async def generate_embeddings(self, texts: List[str], is_query: bool = False) -> List[List[float]]:
         """Generate embeddings for multiple texts (PRO: uses batching)"""
-        if not self._api_key:
-            logger.warning("No API key provided - using mock embeddings")
-            return [_mock_embedding(text) for text in texts]
-
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, embed_texts, texts, self._api_key)
+        return await loop.run_in_executor(None, self._generate_embeddings_sync, texts)
 
     def get_embedding_dimension(self) -> int:
         """Get the dimension of embeddings (OpenAI text-embedding-3-small is 1536d)"""

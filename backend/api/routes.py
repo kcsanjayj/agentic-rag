@@ -106,28 +106,23 @@ PROVIDER_FALLBACK_MODELS = {
 }
 
 # Global components (in production, use dependency injection)
-orchestrator = None
 document_loader = DocumentLoader()
 text_splitter = TextSplitter()
-embedding_generator = None
 vector_store = None
 
 # 🎯 Track active document to prevent data mixing
 active_document_id = None
 active_document_name = None
 
-def get_embedding_generator():
-    """Get or create embedding generator singleton"""
-    global embedding_generator
-    if embedding_generator is None:
-        embedding_generator = EmbeddingGenerator()
-    return embedding_generator
+def get_embedding_generator(api_key: str):
+    """Create embedding generator with user-provided API key (PRO: no global singleton)"""
+    return EmbeddingGenerator(api_key)
 
 # 🔥 DELETED: Duplicate get_vector_store() - now imported from backend.core.vector_store
 
-def get_orchestrator():
-    """🧠 Get Professional Orchestrator with 6-component agentic system"""
-    return Orchestrator()
+def get_orchestrator(api_key: str = None):
+    """🧠 Get Professional Orchestrator with 6-component agentic system (PRO: user API key)"""
+    return Orchestrator(api_key)
 
 def set_active_document(doc_id: str, filename: str):
     """🎯 Set the currently active document for retrieval filtering"""
@@ -189,8 +184,8 @@ async def query_documents(
         
         safe_log(logger, "info", "Querying against active document", document=active_doc['filename'])
         
-        # 🎯 Pass user API key to orchestrator
-        orchestrator = get_orchestrator()
+        # 🎯 PRO: Create orchestrator with user API key (user-based billing)
+        orchestrator = get_orchestrator(x_user_api_key)
         response = await orchestrator.process_query(
             query_request, 
             active_document_id=active_doc["id"],
@@ -208,7 +203,11 @@ async def query_documents(
 
 @router.post("/upload", response_model=DocumentUploadResponse, dependencies=[Depends(verify_api_key)])
 @limiter.limit("5/minute")  # Rate limiting: 5 uploads per minute per IP
-async def upload_document(request: Request, file: UploadFile = File(...)):
+async def upload_document(
+    request: Request, 
+    file: UploadFile = File(...),
+    x_user_api_key: str = Header(None, description="User's OpenAI API key for embeddings")
+):
     """Upload and process a document with validation and size limit"""
     logger.info(f"=== UPLOAD STARTED ===")
     logger.info(f"Received file: {file}")
@@ -299,8 +298,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             print(f"Chunk {i+1}: {c.get('content', '')[:100]}...")
         print(f"Total chunks: {len(chunks)}\n")
         
-        # Generate embeddings and store in vector store
-        embedding_generator = get_embedding_generator()
+        # [SECURITY] Validate user API key for embeddings
+        if not x_user_api_key:
+            raise HTTPException(status_code=400, detail="OpenAI API key required. Provide your API key in X-User-Api-Key header")
+        
+        # Generate embeddings and store in vector store (PRO: user-provided API key)
+        embedding_generator = get_embedding_generator(x_user_api_key)
         
         chunk_texts = [chunk["content"] for chunk in chunks]
         chunk_metadatas = []
@@ -320,8 +323,8 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             metadata = {k: str(v) if not isinstance(v, (str, int, float, bool)) else v for k, v in metadata.items()}
             chunk_metadatas.append(metadata)
         
-        # Generate embeddings
-        logger.info(f"Generating embeddings for {len(chunk_texts)} chunks...")
+        # Generate embeddings using user's API key (PRO: batching for speed)
+        logger.info(f"Generating embeddings for {len(chunk_texts)} chunks using user API key...")
         embeddings = await embedding_generator.generate_embeddings(chunk_texts)
         
         # Store in vector store WITH embeddings

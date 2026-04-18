@@ -114,15 +114,28 @@ def planner(query: str, doc_text: str) -> str:
 class AdaptiveRetriever:
     """Not fixed retrieval — dynamic based on quality"""
     
-    def __init__(self):
+    def __init__(self, api_key: str = None):
         self.vector_store = get_vector_store()
-        self.embedding_gen = EmbeddingGenerator()
+        self.api_key = api_key
+        self.embedding_gen = None  # PRO: initialized per-request with user API key
+    
+    def set_api_key(self, api_key: str):
+        """PRO: Set API key per request for user-based billing"""
+        self.api_key = api_key
+        if api_key:
+            self.embedding_gen = EmbeddingGenerator(api_key)
+        else:
+            self.embedding_gen = None
     
     async def retrieve(self, query: str, doc_id: str, top_k: int = 6) -> List[Dict[str, Any]]:
         """
         Retrieve documents with adaptive retry.
         If weak results (< 3 docs), automatically retries with broader query.
         """
+        # PRO: Ensure embedding generator is initialized with user API key
+        if not self.embedding_gen:
+            raise ValueError("API key not set. Call set_api_key() before retrieve()")
+        
         # Generate embedding
         query_embedding = await self.embedding_gen.generate_embeddings([query])
         
@@ -267,8 +280,8 @@ def critic(answer: str, context: str) -> tuple[bool, List[str]]:
 class RetryHandler:
     """System fixes itself automatically"""
     
-    def __init__(self):
-        self.retriever = AdaptiveRetriever()
+    def __init__(self, api_key: str = None):
+        self.retriever = AdaptiveRetriever(api_key)
     
     async def retry(self, query: str, doc_id: str) -> str:
         """Get broader context for retry"""
@@ -308,10 +321,11 @@ class Orchestrator:
     13. METADATA ENRICHMENT - Document Enhancement
     """
     
-    def __init__(self):
-        self.retriever = AdaptiveRetriever()
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key
+        self.retriever = AdaptiveRetriever(api_key)
         self.reasoning = ReasoningEngine()
-        self.retry_handler = RetryHandler()
+        self.retry_handler = RetryHandler(api_key)
         self.memory = AgentMemory()
         self.vector_store = get_vector_store()
         self._query_cache = {}  # Simple in-memory cache for repeated queries
@@ -326,6 +340,11 @@ class Orchestrator:
         self.meta_data_enrichment = MetaDataEnrichmentAgent()
         
         logger.info("🧠 Orchestrator initialized with 6-component agentic system + 7 new specialized agents + query caching")
+    
+    def set_api_key(self, api_key: str):
+        """PRO: Set API key for user-based billing model"""
+        self.api_key = api_key
+        self.retriever.set_api_key(api_key)
     
     def _get_cached_response(self, query: str, doc_id: str) -> Optional[Dict[str, Any]]:
         """Check if query result is cached"""
@@ -358,13 +377,17 @@ class Orchestrator:
         Args:
             request: QueryRequest with query text
             active_document_id: ID of document to query against
-            user_api_key: User's AI provider API key
+            user_api_key: User's OpenAI API key (for embeddings + LLM)
             
         Returns:
             QueryResponse with answer and metadata
         """
         start_time = time.time()
         conversation_id = request.conversation_id or str(uuid.uuid4())
+        
+        # PRO: Set API key for user-based billing
+        if user_api_key:
+            self.set_api_key(user_api_key)
         
         try:
             # Check for active document
@@ -467,7 +490,12 @@ class Orchestrator:
     async def _get_doc_preview(self, doc_id: str) -> str:
         """Get document preview text for planner"""
         try:
-            embedding_gen = EmbeddingGenerator()
+            # PRO: Use initialized embedding generator or create with API key
+            if not self.api_key:
+                logger.warning("No API key for doc preview - returning empty")
+                return ""
+            
+            embedding_gen = EmbeddingGenerator(self.api_key)
             query_emb = await embedding_gen.generate_embeddings(["document"])
             
             docs = await self.vector_store.similarity_search(

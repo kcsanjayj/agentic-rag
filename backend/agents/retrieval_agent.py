@@ -18,15 +18,24 @@ logger = setup_logger(__name__)
 class RetrievalAgent:
     """Agent responsible for document retrieval with GOLD STANDARD pipeline"""
     
-    def __init__(self):
+    def __init__(self, api_key: str = None):
         self.vector_store = get_vector_store()  # 🔥 FIX: Use singleton to match routes.py
-        self.embedding_generator = EmbeddingGenerator()
+        self.api_key = api_key
+        self.embedding_generator = None  # PRO: initialized per-request
         self.reranker = get_reranker()
         self.query_rewriter = get_query_rewriter()
         self.similarity_threshold = settings.SIMILARITY_THRESHOLD
         self.vector_weight = settings.VECTOR_WEIGHT
         self.bm25_weight = settings.BM25_WEIGHT
         self.rerank_threshold = settings.RERANK_THRESHOLD
+    
+    def set_api_key(self, api_key: str):
+        """PRO: Set API key per request for user-based billing"""
+        self.api_key = api_key
+        if api_key:
+            self.embedding_generator = EmbeddingGenerator(api_key)
+        else:
+            self.embedding_generator = None
         
     async def retrieve(self, query: str, top_k: int = None, enable_rewrite: bool = True, 
                       filter_dict: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -40,6 +49,10 @@ class RetrievalAgent:
             top_k = top_k or settings.TOP_K_RETRIEVAL
             final_k = settings.TOP_K_FINAL
             logger.info(f"FAST RETRIEVAL: Query='{query}' | Filter={filter_dict}")
+            
+            # PRO: Ensure embedding generator is initialized with user API key
+            if not self.embedding_generator:
+                raise ValueError("API key not set. Call set_api_key() before retrieve()")
             
             # 🔥 FAST: Single query, no rewriting
             query_embedding = await self.embedding_generator.generate_query_embedding(query)
