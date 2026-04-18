@@ -441,11 +441,20 @@ class AGENTIC_RAG {
             const formData = new FormData();
             formData.append('file', file);
 
+            // Get API key from memory or sessionStorage
+            const apiKey = this.userApiKey || sessionStorage.getItem('userApiKey') || '';
+            
+            if (!apiKey) {
+                this.updateMessageStatus(processingMessageId, 'error', 'Please configure AI provider API key first');
+                this.isProcessing = false;
+                return;
+            }
+
             const response = await fetch(`${this.apiBaseUrl}/upload`, {
                 method: 'POST',
                 headers: {
                     'X-API-Key': this.internalApiKey, // Internal backend auth
-                    'X-User-Api-Key': this.userApiKey || 'sk-dummy-key-for-upload' // User's AI key for embeddings
+                    'X-User-Api-Key': apiKey // User's AI key for embeddings
                 },
                 body: formData
             });
