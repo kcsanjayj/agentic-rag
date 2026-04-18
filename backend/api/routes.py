@@ -17,7 +17,7 @@ from backend.models.schemas import (
 )
 from backend.core.security import (
     is_safe_input, sanitize_output, validate_query_length,
-    verify_api_key, MAX_FILE_SIZE
+    verify_api_key, MAX_FILE_SIZE, get_user_api_key, CostLimits
 )
 from backend.agents.orchestrator import Orchestrator
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -148,15 +148,11 @@ def _normalize_provider_model(provider: str, model: str) -> str:
 async def query_documents(
     request: Request, 
     query_request: QueryRequest,
-    x_user_api_key: str = Header(None, description="User's AI provider API key")
+    api_key: str = Depends(get_user_api_key)  # ✅ PRO: Unified dependency
 ):
     """Query documents using agentic RAG - user provides their own API key"""
     try:
         safe_log(logger, "info", "Processing query request")
-        
-        # [SECURITY] Validate user API key provided
-        if not x_user_api_key:
-            raise HTTPException(status_code=400, detail="API key required. Provide your AI provider API key in X-User-Api-Key header")
         
         # [SECURITY] Prompt injection protection
         is_safe, reason = is_safe_input(query_request.query)
@@ -164,10 +160,9 @@ async def query_documents(
             safe_log(logger, "warning", "Unsafe input detected", reason=reason)
             raise HTTPException(status_code=400, detail=f"Unsafe input: {reason}")
         
-        # [SECURITY] Input validation
-        is_valid, reason = validate_query_length(query_request.query)
-        if not is_valid:
-            raise HTTPException(status_code=400, detail=reason)
+        # [SECURITY] Cost protection: Validate query length
+        if len(query_request.query) > CostLimits.MAX_QUERY_LENGTH:
+            raise HTTPException(status_code=400, detail=f"Query too long (max {CostLimits.MAX_QUERY_LENGTH} characters)")
         
         # [DOC] Check if we have an active document
         active_doc = get_active_document()
@@ -185,11 +180,11 @@ async def query_documents(
         safe_log(logger, "info", "Querying against active document", document=active_doc['filename'])
         
         # 🎯 PRO: Create orchestrator with user API key (user-based billing)
-        orchestrator = get_orchestrator(x_user_api_key)
+        orchestrator = get_orchestrator(api_key)
         response = await orchestrator.process_query(
             query_request, 
             active_document_id=active_doc["id"],
-            user_api_key=x_user_api_key
+            user_api_key=api_key
         )
         
         safe_log(logger, "info", "Query processed successfully", time=f"{response.processing_time:.2f}s")
@@ -206,7 +201,7 @@ async def query_documents(
 async def upload_document(
     request: Request, 
     file: UploadFile = File(...),
-    x_user_api_key: str = Header(None, description="User's OpenAI API key for embeddings")
+    api_key: str = Depends(get_user_api_key)  # ✅ PRO: Unified dependency
 ):
     """Upload and process a document with validation and size limit"""
     logger.info(f"=== UPLOAD STARTED ===")
@@ -298,12 +293,15 @@ async def upload_document(
             print(f"Chunk {i+1}: {c.get('content', '')[:100]}...")
         print(f"Total chunks: {len(chunks)}\n")
         
-        # [SECURITY] Validate user API key for embeddings
-        if not x_user_api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key required. Provide your API key in X-User-Api-Key header")
+        # [SECURITY] Cost protection: Limit max chunks per upload
+        if len(chunks) > CostLimits.MAX_CHUNKS_PER_UPLOAD:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"Document too large (max {CostLimits.MAX_CHUNKS_PER_UPLOAD} chunks). Please upload a smaller document."
+            )
         
         # Generate embeddings and store in vector store (PRO: user-provided API key)
-        embedding_generator = get_embedding_generator(x_user_api_key)
+        embedding_generator = get_embedding_generator(api_key)
         
         chunk_texts = [chunk["content"] for chunk in chunks]
         chunk_metadatas = []

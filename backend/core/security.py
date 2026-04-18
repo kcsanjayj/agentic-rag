@@ -124,9 +124,7 @@ def sanitize_output(data: Any) -> Any:
     and unsafe content in API responses.
     """
     if isinstance(data, str):
-        # Escape dangerous HTML characters
-        data = data.replace("<", "&lt;").replace(">", "&gt;")
-        # Remove script-like patterns (basic protection)
+        # Remove potential XSS patterns
         data = re.sub(r"(javascript:|<script.*?>.*?</script>)", "", data, flags=re.IGNORECASE)
         return data
     elif isinstance(data, dict):
@@ -134,3 +132,51 @@ def sanitize_output(data: Any) -> Any:
     elif isinstance(data, list):
         return [sanitize_output(item) for item in data]
     return data
+
+
+# =============================================================================
+# USER API KEY DEPENDENCY (PRO: Unified API key handling)
+# =============================================================================
+
+def get_user_api_key(x_user_api_key: str = Header(..., description="User's OpenAI API key")):
+    """
+    FastAPI dependency to extract and validate user's OpenAI API key.
+    
+    Clean: Single source of truth for API key validation
+    Secure: Validates key format before use
+    Reusable: Use in any endpoint that needs user API key
+    """
+    if not x_user_api_key:
+        raise HTTPException(status_code=400, detail="API key required. Provide your OpenAI API key in X-User-Api-Key header")
+    
+    if not x_user_api_key.startswith("sk-"):
+        raise HTTPException(status_code=400, detail="Invalid API key format. Must start with 'sk-'")
+    
+    if len(x_user_api_key) < 20:
+        raise HTTPException(status_code=400, detail="Invalid API key. Key too short.")
+    
+    return x_user_api_key
+
+
+# =============================================================================
+# COST PROTECTION LIMITS (PRO: Prevent abuse)
+# =============================================================================
+
+class CostLimits:
+    """Cost protection limits for user-provided API keys"""
+    
+    MAX_TOKENS_PER_REQUEST = 4000  # Max tokens per LLM call
+    MAX_CHUNKS_PER_UPLOAD = 500   # Max chunks per document upload
+    MAX_CHUNK_SIZE = 2000         # Max characters per chunk
+    MAX_FILE_SIZE_MB = 50         # Max file size in MB
+    MAX_QUERY_LENGTH = 1000       # Max query length in characters
+    MAX_REQUESTS_PER_MINUTE = 30  # Rate limit per user
+
+
+def validate_query_length(query: str) -> tuple[bool, str]:
+    """Validate query length for cost protection"""
+    if len(query) > CostLimits.MAX_QUERY_LENGTH:
+        return False, f"Query too long (max {CostLimits.MAX_QUERY_LENGTH} characters)"
+    if len(query) < 3:
+        return False, "Query too short (min 3 characters)"
+    return True, ""
