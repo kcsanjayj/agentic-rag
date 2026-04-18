@@ -1401,3 +1401,62 @@ body {
         top: 10%;
     }
 }
+
+/* =============================================================================
+   VISIBILITY FIXES - Ensure all buttons and UI elements are visible
+   ============================================================================= */
+
+/* Force all buttons to be visible */
+button,
+.send-btn,
+.file-upload-btn,
+.new-chat-btn,
+.ai-config-btn,
+.search-files-btn,
+.config-btn {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Ensure chat container is visible */
+.chat-container,
+.app-container {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Ensure messages are visible */
+.messages-container,
+.message,
+.assistant-message,
+.user-message {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Force icons to be visible */
+.fa,
+.fas,
+.far,
+.fab,
+i[class*="fa-"] {
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: inline-block !important;
+}
+
+/* Header elements visibility */
+.chat-header,
+.header-content,
+.header-buttons {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Input area visibility */
+.chat-footer,
+.input-container,
+.text-input-wrapper {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
