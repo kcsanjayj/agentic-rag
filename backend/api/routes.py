@@ -430,34 +430,35 @@ async def upload_document(
                 detail=f"Unsupported file format. Supported: {', '.join(document_loader.get_supported_formats())}"
             )
         
-        # Validate file size
+        # Validate file size (read once, store for later)
         content = await file.read()
-        if len(content) > MAX_FILE_SIZE:
+        content_size = len(content)
+        logger.info(f"File size: {content_size} bytes")
+        
+        if content_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
                 detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)}MB)"
             )
-        await file.seek(0)  # Reset file pointer after reading
         
         # Save uploaded file - SECURITY: Sanitize filename to prevent path traversal
         upload_dir = "data/uploads"
         os.makedirs(upload_dir, exist_ok=True)
         
         # SECURITY: Sanitize filename to prevent directory traversal attacks
-        # Remove any path separators and get only the base filename
         safe_filename = os.path.basename(file.filename)
-        # Remove any potentially dangerous characters
         safe_filename = re.sub(r'[^\w\-\.]', '_', safe_filename)
-        # Ensure filename is not empty after sanitization
         if not safe_filename or safe_filename == '.' or safe_filename == '..':
             raise HTTPException(status_code=400, detail="Invalid filename after sanitization")
         
         file_path = os.path.join(upload_dir, safe_filename)
         
-        # Write file
+        # Write file using stored content (FIX: don't read again!)
+        logger.info(f"Writing file to: {file_path}")
         with open(file_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
+        
+        logger.info(f"File written successfully: {content_size} bytes")
         
         # Load and process document
         document = await document_loader.load_document(file_path, file.filename)

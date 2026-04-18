@@ -18,3 +18,9 @@ slowapi==0.1.9
 
 # Production memory
 redis==5.0.4
+
+# Document processing (for uploads)
+PyPDF2==3.0.1
+python-docx==1.1.2
+beautifulsoup4==4.12.3
+aiofiles==23.2.1
