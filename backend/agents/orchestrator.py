@@ -22,6 +22,8 @@ from backend.agents.table_extraction_agent import TableExtractionAgent
 from backend.agents.fact_verification_agent import FactVerificationAgent
 from backend.agents.conflict_resolution_agent import ConflictResolutionAgent
 from backend.agents.meta_data_enrichment_agent import MetaDataEnrichmentAgent
+from backend.agents.memory import ConversationMemory, SessionMemoryManager
+from backend.agents.agent_loop import AgenticRAG
 from backend.core.embeddings import EmbeddingGenerator
 from backend.utils.logger import setup_logger
 from backend.models.schemas import QueryRequest, QueryResponse
@@ -620,6 +622,106 @@ class Orchestrator:
             "latencies": latencies,
             "retry_reason": retry_reason
         }
+    
+    # ==========================================================================
+    # PRO: NEW AGENTIC RAG (Tools + Memory + Multi-step)
+    # ==========================================================================
+    
+    async def process_query_pro(
+        self,
+        request: QueryRequest,
+        active_document_id: str = None,
+        user_api_key: str = None,
+        session_id: str = None,
+        enable_tools: bool = True
+    ) -> QueryResponse:
+        """
+        PRO: Agentic RAG with tools, memory, and multi-step reasoning.
+        
+        This is the next-generation agentic pipeline that:
+        - Uses tools (calculator, search, etc.)
+        - Maintains conversation memory
+        - Does multi-step reasoning
+        """
+        import time
+        start_time = time.time()
+        conversation_id = request.conversation_id or str(uuid.uuid4())
+        
+        try:
+            # Validate API key
+            if not user_api_key:
+                return QueryResponse(
+                    query=request.query,
+                    answer="API key required. Please provide your OpenAI API key.",
+                    sources=[],
+                    agent_steps=[{"error": "no_api_key"}],
+                    processing_time=time.time() - start_time,
+                    confidence_score=0.0,
+                    conversation_id=conversation_id
+                )
+            
+            # Get or create conversation memory
+            memory = None
+            if session_id:
+                memory = SessionMemoryManager().get_or_create(session_id)
+            
+            # Initialize AgenticRAG with user API key
+            agentic_rag = AgenticRAG(api_key=user_api_key)
+            
+            # Run agentic loop
+            result = await agentic_rag.run(
+                query=request.query,
+                memory=memory,
+                document_id=active_document_id,
+                enable_tools=enable_tools
+            )
+            
+            # Store in memory
+            if memory:
+                memory.add(request.query, result.answer)
+            
+            # Build agent steps for response
+            agent_steps = []
+            for step in result.steps:
+                agent_steps.append({
+                    "step": step.step_number,
+                    "action": step.action,
+                    "latency_ms": step.latency_ms
+                })
+            
+            # Add tool calls if any
+            if result.tool_calls:
+                agent_steps.append({
+                    "tools_used": [
+                        {"tool": tc["tool"], "input": tc["input"][:50]}
+                        for tc in result.tool_calls
+                    ]
+                })
+            
+            processing_time = time.time() - start_time
+            
+            return QueryResponse(
+                query=request.query,
+                answer=result.answer,
+                sources=[],
+                agent_steps=agent_steps,
+                processing_time=processing_time,
+                confidence_score=result.confidence,
+                retrieved_docs=result.retrieved_docs,
+                conversation_id=conversation_id
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ PRO Agentic error: {str(e)}")
+            return QueryResponse(
+                query=request.query,
+                answer=f"Error: {str(e)}",
+                sources=[],
+                agent_steps=[{"error": str(e)}],
+                processing_time=time.time() - start_time,
+                confidence_score=0.0,
+                conversation_id=conversation_id
+            )
 
 
 # =============================================================================
