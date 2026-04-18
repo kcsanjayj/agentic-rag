@@ -152,7 +152,18 @@ def get_user_api_key(x_user_api_key: str = Header(..., description="User's OpenA
     Clean: Single source of truth for API key validation
     Secure: Validates key format before use
     Reusable: Use in any endpoint that needs user API key
+    
+    Special: Pass 'existing' to use the key stored in backend runtime config.
     """
+    # Handle special 'existing' value - fetch key from runtime config
+    if x_user_api_key == 'existing':
+        from backend.config import get_runtime_config
+        provider = get_runtime_config("AI_PROVIDER", "openai")
+        stored_key = get_runtime_config(f"{provider.upper()}_API_KEY", "")
+        if stored_key:
+            return stored_key
+        raise HTTPException(status_code=400, detail="No API key configured in backend. Please configure in settings first.")
+    
     if not x_user_api_key:
         raise HTTPException(status_code=400, detail="API key required. Provide your OpenAI API key in X-User-Api-Key header")
     

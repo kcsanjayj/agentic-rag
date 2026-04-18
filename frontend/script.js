@@ -170,8 +170,26 @@ class AGENTIC_RAG {
 
     async sendQueryToBackend(query) {
         try {
-            // Check if user API key is set
-            if (!this.userApiKey) {
+            // Check if user API key is set in frontend
+            let apiKey = this.userApiKey;
+            
+            // If not set, check if backend has a configured key
+            if (!apiKey) {
+                try {
+                    const configResp = await fetch(`${this.apiBaseUrl}/config`, {
+                        headers: { 'X-API-Key': this.internalApiKey }
+                    });
+                    const config = await configResp.json();
+                    if (config.has_api_key) {
+                        apiKey = 'existing';  // Signal backend to use its stored key
+                    }
+                } catch (e) {
+                    console.log('Could not check backend config for key');
+                }
+            }
+            
+            // If still no key, show warning
+            if (!apiKey) {
                 this.addMessage('⚠️ Please configure your AI provider API key in settings first.', 'assistant');
                 this.isProcessing = false;
                 this.sendBtn.disabled = false;
@@ -183,7 +201,7 @@ class AGENTIC_RAG {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-API-Key': this.internalApiKey, // Internal backend auth
-                    'X-User-Api-Key': this.userApiKey // User's AI provider key
+                    'X-User-Api-Key': apiKey // User's AI provider key
                 },
                 body: JSON.stringify({
                     query: query,
@@ -818,6 +836,11 @@ class AGENTIC_RAG {
             });
             
             if (response.ok) {
+                // Store API key in frontend for subsequent queries (if not masked)
+                if (apiKey && apiKey !== 'null' && apiKey !== 'undefined') {
+                    this.userApiKey = apiKey;
+                }
+                
                 // Close modal immediately - don't wait for API test
                 this.hideConfigModal();
                 this.addMessage(`✅ Configuration saved for ${provider}.`, 'assistant');
