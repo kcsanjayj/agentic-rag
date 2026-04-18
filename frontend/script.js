@@ -445,6 +445,10 @@ class AGENTIC_RAG {
             // Get embedding API key (OpenAI) for upload - required for embeddings
             const apiKey = this.embeddingApiKey || sessionStorage.getItem('embeddingApiKey') || '';
             
+            console.log('Upload - embeddingApiKey from memory:', this.embeddingApiKey ? 'YES' : 'NO');
+            console.log('Upload - embeddingApiKey from sessionStorage:', sessionStorage.getItem('embeddingApiKey') ? 'YES' : 'NO');
+            console.log('Upload - final apiKey length:', apiKey.length);
+            
             if (!apiKey) {
                 this.updateMessageStatus(processingMessageId, 'error', 'Please configure OpenAI Embedding API key in AI Config first');
                 this.isProcessing = false;

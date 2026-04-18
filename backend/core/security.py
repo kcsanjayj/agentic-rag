@@ -145,7 +145,7 @@ def sanitize_output(data: Any) -> Any:
 # USER API KEY DEPENDENCY (PRO: Unified API key handling)
 # =============================================================================
 
-def get_user_api_key(x_user_api_key: str = Header(..., description="User's OpenAI API key")):
+def get_user_api_key(x_user_api_key: str = Header(None, description="User's OpenAI API key")):
     """
     FastAPI dependency to extract and validate user's OpenAI API key.
     
@@ -153,14 +153,19 @@ def get_user_api_key(x_user_api_key: str = Header(..., description="User's OpenA
     Secure: Validates key format before use
     Reusable: Use in any endpoint that needs user API key
     """
+    logger.info(f"get_user_api_key called - header present: {bool(x_user_api_key)}, length: {len(x_user_api_key) if x_user_api_key else 0}")
+    
     if not x_user_api_key:
+        logger.error("API key missing - X-User-Api-Key header not provided")
         raise HTTPException(status_code=400, detail="API key required. Provide your API key in X-User-Api-Key header")
     
     # Basic length check - different providers have different key formats
     # OpenAI: sk-..., NVIDIA: nvapi-... or long hex, etc.
     if len(x_user_api_key) < 10:
+        logger.error(f"API key too short: {len(x_user_api_key)} chars")
         raise HTTPException(status_code=400, detail="Invalid API key. Key too short.")
     
+    logger.info(f"API key validated successfully")
     return x_user_api_key
 
 

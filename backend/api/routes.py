@@ -415,6 +415,7 @@ async def upload_document(
     """Upload and process a document with validation and size limit"""
     logger.info(f"=== UPLOAD STARTED ===")
     logger.info(f"Received file: {file}")
+    logger.info(f"API key received: {'YES (length: ' + str(len(api_key)) + ')' if api_key else 'NO'}")
     file_path = None
     try:
         logger.info(f"Uploading document: {file.filename if file else 'NO FILE'}")
