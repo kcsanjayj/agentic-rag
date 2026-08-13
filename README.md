@@ -52,16 +52,6 @@ User Query
 **Try Aetherion:**
 https://agentic-rag-gamma.vercel.app
 
-### 📸 System in Action
-
-![Aetherion execution screenshot](docs/demo/aetherion-demo.png)
-
-The screenshot shows the actual system execution flow:
-
-**request → retrieval → generation → evaluation → refinement → final response**
-
-> Replace `docs/demo/aetherion-demo.png` with the exact screenshot filename currently stored in your repository.
-
 ---
 
 # 🏗️ Architecture
