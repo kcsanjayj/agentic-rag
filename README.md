@@ -1,132 +1,223 @@
-# 🚀 Aetherion — Agentic Multi-LLM RAG System
+# ⚡ Aetherion — Evaluation-Driven Agentic RAG
 
-## 🚀 Summary
-
-Aetherion turns a standard RAG pipeline into a **self-evaluating AI system** that improves its own answers before responding. 
-
-**TL;DR:**
-- Self-correcting RAG with critic evaluation loop
-- Multi-LLM fallback orchestration (7+ providers)
-- Evaluation-driven response refinement with bounded retries
-
-> **Impact:** Built a agentic RAG system with evaluation-driven response refinement and multi-LLM orchestration.
-
-A agentic RAG system that improves LLM outputs using retrieval + evaluation + controlled retry loops. Every answer goes through **Generate → Evaluate → Refine → Finalize** before reaching the user.
-
-![Aetherion UI](docs/images/ui.png)
+> **A self-evaluating RAG system that retrieves evidence, generates answers, critiques them, and automatically refines weak responses before finalization.**
 
 ---
 
-## 🧠 What is this?
+## ⚡ 30-Second Overview
 
-Instead of trusting a single LLM response, the system acts like an exam system with a built-in examiner (critic agent) that scores every answer and triggers retries for low-quality outputs.
+**Aetherion is not a single LLM call.**
 
-> Think: Student writes answer → Teacher grades it → Student fixes mistakes → Final submission
+It adds an evaluation and refinement loop on top of traditional RAG:
 
-## ⚙️ Core Pipeline
-
-<br>
-
-### 🧩 Architecture
-```
-backend/agents/
-├── planner_agent      → understands query intent
-├── reasoning_agent    → generates response
-├── critic_agent       → evaluates quality
-├── retry_agent        → triggers refinement loop
-└── orchestrator       → controls full pipeline
+```text id="n1h3k8"
+User Query
+    │
+    ▼
+  Planner
+    │
+    ▼
+ Retriever
+    │
+    ▼
+   LLM
+    │
+    ▼
+  Critic
+   │  │
+   │  └── Weak → Retry → Refine
+   │                  │
+   └──── Good ◄──────┘
+          │
+          ▼
+     Final Answer
 ```
 
-<br>
+### 🧠 What I built
 
-### 🔄 Execution Trace
+* 🧠 Query planning
+* 📚 Retrieval-Augmented Generation
+* 🤖 Multi-LLM orchestration
+* 🔍 Critic-based evaluation
+* 🔄 Bounded self-correction
+* ♻️ Retry/refinement loop
+* 🛡️ Provider fallback
+* 📊 Execution tracing
+* ⚡ Async FastAPI backend
+
+---
+
+# 🎥 Live Demo
+
+**Try Aetherion:**
+https://agentic-rag-gamma.vercel.app
+
+### 📸 System in Action
+
+![Aetherion execution screenshot](docs/demo/aetherion-demo.png)
+
+The screenshot shows the actual system execution flow:
+
+**request → retrieval → generation → evaluation → refinement → final response**
+
+> Replace `docs/demo/aetherion-demo.png` with the exact screenshot filename currently stored in your repository.
+
+---
+
+# 🏗️ Architecture
+
+```text id="3f9k1x"
+                  User Query
+                      │
+                      ▼
+                  ┌───────┐
+                  │Planner│
+                  └───┬───┘
+                      ▼
+                 ┌──────────┐
+                 │Retriever │
+                 └────┬─────┘
+                      ▼
+                 ┌──────────┐
+                 │Reasoning │
+                 │   LLM    │
+                 └────┬─────┘
+                      ▼
+                  ┌───────┐
+                  │ Critic│
+                  └───┬───┘
+                      │
+                ┌─────┴─────┐
+                ▼           ▼
+              PASS         FAIL
+                │           │
+                │         Retry
+                │           │
+                │        Refine
+                │           │
+                └─────◄─────┘
+                      │
+                      ▼
+                   Finalize
 ```
-Query: "What is attention mechanism?"
-   ↓
-┌─────────────┐    Planner: "analyze" intent detected
-│   PLANNER   │ →  Strategy: technical deep-dive
-└──────┬──────┘
-   ↓
-┌─────────────┐    Retriever: fetching 5 relevant chunks
-│  RETRIEVER  │ →  Found: "attention-is-all-you-need.pdf"
-└──────┬──────┘
-   ↓
-┌─────────────┐    LLM: generating response
-│     LLM     │ →  Score: 6.5/10 ❌ (too shallow)
-└──────┬──────┘
-   ↓
-┌─────────────┐    Critic: "missing technical depth, no citations"
-│   CRITIC    │ →  Action: trigger retry
-└──────┬──────┘
-   ↓
-┌─────────────┐    Retry Agent: prompting "add QKV details + citations"
-│    RETRY    │ →  Feedback sent to LLM
-└──────┬──────┘
-   ↓
-┌─────────────┐    LLM: regenerating with depth
-│     LLM     │ →  Score: 8.7/10 ✅
-└──────┬──────┘
-   ↓
-Final Answer: "Self-attention computes Query, Key, Value matrices..."
+
+### Key design decision
+
+The system separates:
+
+**planning ≠ retrieval ≠ generation ≠ evaluation ≠ refinement**
+
+---
+
+# 🔥 Engineering Highlights
+
+### Evaluation → Refinement
+
+Instead of:
+
+```text id="1n6g7x"
+Generate → Return
 ```
 
----
+Aetherion uses:
 
-<br>
+```text id="n9q1j4"
+Generate → Evaluate → Refine / Finalize
+```
 
-## ✨ Key Features
+### Multi-LLM Routing
 
-- 🧠 **Evaluation-driven generation** — Every response is scored before being returned
-- 🔁 **Self-correction loop** — Automatically retries low-quality outputs (bounded iterations)
-- 🔌 **Multi-LLM routing** — OpenAI / Anthropic / Groq / HuggingFace fallback support
-- 📊 **Execution trace** — Full visibility into retrieval → generation → evaluation steps
-- ⚡ **Async FastAPI backend** — Handles concurrent requests efficiently
+Supports:
 
----
+* OpenAI
+* Anthropic
+* Groq
+* Hugging Face
 
-## 📸 Live Demo
+### Failure Handling
 
-**Try it:** https://agentic-rag-gamma.vercel.app
-
-![Chat Interface](docs/images/chat.png)
-
----
-
-## ⚖️ Design Tradeoffs
-
-| Tradeoff | Choice |
-|----------|--------|
-| ⏱️ **Higher latency** | due to evaluation + retry loop |
-| 🎯 **Higher accuracy** | critic filters weak responses before final output |
-| 💰 **Higher cost** | multiple LLM calls per query |
-| 🧩 **Better reliability** | fallback routing + failure recovery |
+| Failure          | Response          |
+| ---------------- | ----------------- |
+| LLM timeout      | Provider fallback |
+| Weak generation  | Retry             |
+| Retrieval noise  | Context filtering |
+| Retry exhaustion | Degraded response |
 
 ---
 
-## 🧪 Failure Handling
+# 🛠️ Tech Stack
 
-| Failure Mode | Response |
-|--------------|----------|
-| LLM timeout | → fallback provider |
-| Low-quality output | → retry loop |
-| Retrieval noise | → filtered context selection |
-| Persistent failure | → safe degraded response |
+**Python · FastAPI · ChromaDB · sentence-transformers · OpenAI · Anthropic · Groq · Hugging Face · Tailwind CSS · Docker · Vercel · Railway**
 
 ---
 
-## 🧠 Why this matters
+# 🚀 Run Locally
 
-This project demonstrates:
+```bash id="d0a7cu"
+git clone https://github.com/kcsanjayj/Aetherion.git
+cd Aetherion
 
-- **Agentic orchestration** (planner + critic + retry loop)
-- **Evaluation-as-a-stage** (not post-processing)
-- **Real-world tradeoffs** (latency vs quality)
-- **Production-ready FastAPI architecture**
-- **Multi-LLM routing systems**
+python -m venv .venv
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+
+python start.py
+```
+
+Configure the required API keys through environment variables.
+
+**Never commit secrets to Git.**
 
 ---
 
-## 🧪 Tech Stack
+# 📊 Evaluation
 
-FastAPI · ChromaDB · OpenAI / Anthropic / Groq · sentence-transformers · Tailwind · Vercel · Railway · Docker
+Aetherion is designed to compare:
 
+```text id="4v4t4q"
+Baseline RAG
+     vs
+Aetherion
+```
+
+Key metrics:
+
+**Correctness · Groundedness · Retrieval Quality · Citation Quality · Hallucination Rate · Latency · Retry Rate · Cost / Query**
+
+> Performance improvements should only be claimed after reproducible benchmarking.
+
+---
+
+# 🚧 Limitations
+
+* Additional LLM calls increase latency and cost.
+* Critics can make incorrect judgments.
+* Retrieval quality affects final answers.
+* Self-correction can occasionally reinforce errors.
+
+---
+
+## ⭐ Why Aetherion?
+
+Traditional RAG:
+
+```text id="pry6xk"
+Retrieve → Generate → Return
+```
+
+Aetherion:
+
+```text id="r6f9gq"
+Retrieve → Generate → Evaluate → Refine → Finalize
+```
+
+> **Aetherion explores what happens when evaluation becomes a first-class part of the RAG generation pipeline.**
+
+---
+
+## 📜 License
+
+MIT License.
+
+**Built by [kcsanjayj](https://github.com/kcsanjayj)**
